@@ -1,0 +1,33 @@
+{
+  "name": "storyboard-workbench",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "分镜 CSV -> 无限画布 -> 首帧图生成",
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "dev:server": "node --watch server/index.mjs",
+    "dev:web": "vite --config web/vite.config.ts",
+    "build": "vite build --config web/vite.config.ts",
+    "start": "node server/index.mjs",
+    "typecheck": "tsc -p web/tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@xyflow/react": "^12.3.6",
+    "express": "^4.21.2",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "zustand": "^5.0.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.5",
+    "@vitejs/plugin-react": "^4.3.4",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.7"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
