@@ -46,6 +46,21 @@ export class Store {
     fs.mkdirSync(this.assetsDir, { recursive: true });
     this.data = this.#load();
     this.#recoverInterrupted();
+    this.#syncLatestSelection();
+  }
+
+  // 单图模式下节点展示最新一次生成结果，修正历史遗留的旧选中项
+  #syncLatestSelection() {
+    let changed = 0;
+    for (const node of this.data.nodes) {
+      const run = node.data?.run;
+      const latest = run?.candidates?.[run.candidates.length - 1];
+      if (latest && run.selectedId !== latest.id) {
+        run.selectedId = latest.id;
+        changed += 1;
+      }
+    }
+    if (changed) this.save();
   }
 
   #recoverInterrupted() {

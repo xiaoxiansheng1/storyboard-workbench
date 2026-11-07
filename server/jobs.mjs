@@ -7,34 +7,40 @@ const clampInt = (value, min, max, fallback) => {
   return Math.max(min, Math.min(max, Math.trunc(n)));
 };
 
-export function createJobs({ store, provider, config, broadcast }) {
+export function createJobs({ store, getProvider, config, broadcast }) {
   const queue = [];
   const queued = new Set();
   const running = new Set();
   let active = 0;
 
-  const providerSig = `${provider.name}:${provider.model}`;
-
-  function signatureFor(node, n) {
-    return `${node.data.promptHash}|${providerSig}|${config.openai.size}|${n}`;
+  function signatureFor(node, n, provider) {
+    return `${node.data.promptHash}|${provider.name}:${provider.model}|${config.openai.size}|${config.promptLang}|${n}`;
   }
 
   function emit(node) {
     broadcast({ type: 'run', nodeId: node.id, run: node.data.run, usage: store.usageCount() });
   }
 
-  function isSatisfied(node, n) {
+  function isSatisfied(node, n, provider) {
     const run = node.data.run;
+    const selected = run.candidates.find((candidate) => candidate.id === run.selectedId);
+    if (
+      run.status === 'done' &&
+      run.promptHash === node.data.promptHash &&
+      selected?.provider === 'upload'
+    ) {
+      return true;
+    }
     return (
       run.status === 'done' &&
       run.promptHash === node.data.promptHash &&
-      run.signature === signatureFor(node, n) &&
+      run.signature === signatureFor(node, n, provider) &&
       run.candidates.length >= n
     );
   }
 
   function enqueue(nodeIds, options = {}) {
-    const n = clampInt(options.n, 1, 8, 4);
+    const n = clampInt(options.n, 1, 8, 1);
     const force = Boolean(options.force);
     const seed = Number.isFinite(Number(options.seed)) && options.seed !== null && options.seed !== ''
       ? Math.trunc(Number(options.seed))
@@ -42,6 +48,7 @@ export function createJobs({ store, provider, config, broadcast }) {
 
     let queuedCount = 0;
     let skipped = 0;
+    const provider = getProvider();
 
     for (const id of nodeIds) {
       const node = store.node(id);
@@ -53,7 +60,7 @@ export function createJobs({ store, provider, config, broadcast }) {
         skipped += 1;
         continue;
       }
-      if (!force && isSatisfied(node, n)) {
+      if (!force && isSatisfied(node, n, provider)) {
         skipped += 1;
         continue;
       }
@@ -105,13 +112,14 @@ export function createJobs({ store, provider, config, broadcast }) {
     if (!node) return;
     const data = node.data;
     const run = data.run;
+    const provider = getProvider();
 
     if (run.promptHash !== data.promptHash) {
       run.candidates = [];
       run.selectedId = null;
     }
     run.promptHash = data.promptHash;
-    run.signature = signatureFor(node, job.n);
+    run.signature = signatureFor(node, job.n, provider);
     run.status = 'running';
     run.error = null;
     run.progress = { done: 0, total: job.n };
@@ -124,7 +132,7 @@ export function createJobs({ store, provider, config, broadcast }) {
 
     for (let i = 0; i < job.n; i += 1) {
       if (store.usageCount() >= config.dailyCap) {
-        throw new Error(`今日生成上限（${config.dailyCap} 张）已用完，请明天再跑或调高 DAILY_IMAGE_CAP`);
+        throw new Error(`今日生成上限（${config.dailyCap} 张）已用完，请明天再跑或在系统设置里调高每日上限`);
       }
 
       const seed = job.seed !== undefined ? job.seed + i : undefined;
@@ -151,7 +159,7 @@ export function createJobs({ store, provider, config, broadcast }) {
         url: asset.url,
         filename: asset.filename,
         seed: seed ?? null,
-        size: config.openai.size,
+        size: result.size || config.openai.size,
         provider: provider.name,
         model: provider.model,
         promptHash: data.promptHash,
@@ -159,7 +167,7 @@ export function createJobs({ store, provider, config, broadcast }) {
       };
 
       run.candidates.push(candidate);
-      if (!run.selectedId) run.selectedId = candidate.id;
+      run.selectedId = candidate.id;
       run.progress = { done: i + 1, total: job.n };
       run.updatedAt = new Date().toISOString();
       store.bumpUsage();
@@ -182,5 +190,5 @@ export function createJobs({ store, provider, config, broadcast }) {
     store.save();
   }
 
-  return { enqueue };
+  return { enqueue, refresh: pump };
 }

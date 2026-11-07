@@ -17,7 +17,9 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   }
   if (!res.ok) {
     const message = (json as { error?: string } | null)?.error || `HTTP ${res.status}`;
-    throw new Error(message);
+    const error = new Error(message) as Error & { payload?: unknown };
+    error.payload = json;
+    throw error;
   }
   return json as T;
 }

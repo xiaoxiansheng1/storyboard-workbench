@@ -1,6 +1,14 @@
-import { useEffect, useState, type ChangeEvent } from 'react';
+import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { useWorkbench } from '../store';
-import type { RunStatus, ShotData } from '../types';
+import type { ShotData } from '../types';
+import {
+  IconChevronRight,
+  IconClose,
+  IconCopy,
+  IconDownload,
+  IconImage,
+  IconUpload,
+} from './icons';
 
 interface FormState {
   caption: string;
@@ -9,14 +17,6 @@ interface FormState {
   negativeZh: string;
   negativeEn: string;
 }
-
-const STATUS_TEXT: Record<RunStatus, string> = {
-  idle: '待生成',
-  queued: '排队中',
-  running: '生成中',
-  done: '已完成',
-  error: '失败',
-};
 
 function fields(data: ShotData): FormState {
   return {
@@ -34,11 +34,14 @@ export function Inspector() {
   const config = useWorkbench((s) => s.project?.config);
   const patchNode = useWorkbench((s) => s.patchNode);
   const generate = useWorkbench((s) => s.generate);
-  const selectCandidate = useWorkbench((s) => s.selectCandidate);
-  const clearRun = useWorkbench((s) => s.clearRun);
   const setLightbox = useWorkbench((s) => s.setLightbox);
   const selectNode = useWorkbench((s) => s.selectNode);
+  const setSettingsOpen = useWorkbench((s) => s.setSettingsOpen);
+  const uploadImage = useWorkbench((s) => s.uploadImage);
   const notify = useWorkbench((s) => s.notify);
+
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
 
   const [form, setForm] = useState<FormState>({
     caption: '',
@@ -47,18 +50,21 @@ export function Inspector() {
     negativeZh: '',
     negativeEn: '',
   });
-  const [tab, setTab] = useState<'en' | 'zh'>('en');
-  const [n, setN] = useState(4);
-  const [seed, setSeed] = useState('');
-  const [force, setForce] = useState(true);
+  const [tab, setTab] = useState<'en' | 'zh'>('zh');
+  const [submitting, setSubmitting] = useState(false);
+  const busy = node ? node.data.run.status === 'queued' || node.data.run.status === 'running' : false;
 
   useEffect(() => {
     if (!node) return;
     setForm(fields(node.data));
-    setTab(config?.promptLang === 'zh' ? 'zh' : 'en');
+    setTab(config?.promptLang === 'en' ? 'en' : 'zh');
     // 只在切换镜头时重置编辑器，避免 SSE 更新覆盖正在输入的内容
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [node?.id]);
+
+  useEffect(() => {
+    if (busy) setSubmitting(false);
+  }, [busy, node?.id]);
 
   if (!node) return null;
 
@@ -69,7 +75,7 @@ export function Inspector() {
     run.candidates.findIndex((candidate) => candidate.id === run.selectedId),
   );
   const selected = run.candidates[selectedIndex] || null;
-  const busy = run.status === 'queued' || run.status === 'running';
+  const needsKey = config?.provider === 'aiclone' && !config.hasKey;
   const dirty =
     form.caption !== data.caption ||
     form.promptZh !== data.promptZh ||
@@ -80,6 +86,17 @@ export function Inspector() {
   const promptValue = tab === 'en' ? form.promptEn : form.promptZh;
   const negativeValue = tab === 'en' ? form.negativeEn : form.negativeZh;
   const inUse = config?.promptLang === tab;
+  const working = busy || submitting;
+
+  const submit = async () => {
+    if (working || dirty || needsKey) return;
+    setSubmitting(true);
+    try {
+      await generate(node.id, { n: 1, force: true });
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   const setField =
     (key: keyof FormState) => (event: ChangeEvent<HTMLTextAreaElement>) => {
@@ -92,35 +109,46 @@ export function Inspector() {
       .join('\n\n');
     void navigator.clipboard
       .writeText(text)
-      .then(() => notify('提示词已复制'))
-      .catch(() => notify('复制失败'));
+      .then(() => notify('提示词已复制', 'success'))
+      .catch(() => notify('复制失败', 'error'));
   };
 
-  const statusText = run.status === 'done' && !run.candidates.length ? '待生成' : STATUS_TEXT[run.status];
+  const pickFile = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    setUploading(true);
+    try {
+      await uploadImage(node.id, file);
+    } finally {
+      setUploading(false);
+    }
+  };
 
   return (
     <aside className="inspector">
       <header className="inspector-head">
-        <div>
-          <div className="inspector-eyebrow">SHOT</div>
-          <div className="inspector-title-row">
-            <span className="inspector-no">{String(data.no).padStart(2, '0')}</span>
-            <span className={`anchor-tag ${data.anchor === 'B' ? 'b' : 'a'}`}>
-              {data.anchor} {data.anchor === 'B' ? '空镜' : '人物'}
-            </span>
-            <span className="inspector-dur">{data.duration.toFixed(2)}s</span>
-          </div>
-          <div className="inspector-tc">
-            {data.srtStart} → {data.srtEnd}
+        <div className="inspector-head-main">
+          <span className="inspector-no">{String(data.no).padStart(2, '0')}</span>
+          <div className="inspector-meta">
+            <div className="inspector-title-row">
+              <span className={`anchor-tag ${data.anchor === 'B' ? 'b' : 'a'}`}>
+                {data.anchor} {data.anchor === 'B' ? '空镜' : '人物'}
+              </span>
+              <span className="inspector-dur">{data.duration.toFixed(2)}s</span>
+            </div>
+            <div className="inspector-tc">
+              {data.srtStart} → {data.srtEnd}
+            </div>
           </div>
         </div>
         <button type="button" className="icon-btn" onClick={() => selectNode(null)} title="关闭">
-          ×
+          <IconClose size={15} />
         </button>
       </header>
 
       <div className="inspector-scroll">
-        <div className={`hero ${selected ? '' : 'is-empty'}`}>
+        <div className={`hero ${selected ? '' : 'is-empty'} ${working && !selected ? 'is-loading' : ''}`}>
           {selected ? (
             <img
               src={selected.url}
@@ -128,180 +156,162 @@ export function Inspector() {
               onClick={() => setLightbox({ nodeId: node.id, index: selectedIndex })}
             />
           ) : (
-            <div className="hero-empty">
-              <span className="hero-glyph">{data.anchor === 'B' ? '▤' : '▣'}</span>
-              <span>{busy ? '正在生成…' : '暂无首帧'}</span>
+            <div className={`hero-empty ${working ? 'is-loading' : ''}`}>
+              {working ? (
+                <span className="spinner" />
+              ) : (
+                <span className="hero-glyph">
+                  <IconImage size={26} />
+                </span>
+              )}
+              <span>
+                {busy
+                  ? run.status === 'queued'
+                    ? '排队中…'
+                    : '正在生成首帧…'
+                  : submitting
+                    ? '正在提交…'
+                    : '暂无首帧'}
+              </span>
+              {working && (
+                <span className="marquee" aria-hidden="true">
+                  <span>AI 正在绘制 · GENERATING · AI 正在绘制 · GENERATING ·&nbsp;</span>
+                </span>
+              )}
+              {working && <span className="scan" />}
             </div>
           )}
           {selected && <div className="hero-shade" />}
-          <div className="hero-top">
-            <span className="hero-chip">
-              {String(run.candidates.length).padStart(2, '0')} TAKES
-            </span>
-            <span className={`status-pill ${run.status}`}>{statusText}</span>
-          </div>
-          {selected && (
-            <div className="hero-bottom">
-              <span className="hero-take">TAKE {String(selectedIndex + 1).padStart(2, '0')}</span>
-              <button
-                type="button"
-                className="hero-link"
-                onClick={() => setLightbox({ nodeId: node.id, index: selectedIndex })}
-              >
-                查看大图 ↗
-              </button>
+          {selected && working && (
+            <div className="hero-loading">
+              <span className="marquee" aria-hidden="true">
+                <span>AI 正在绘制 · GENERATING · AI 正在绘制 · GENERATING ·&nbsp;</span>
+              </span>
+              <span className="scan" />
             </div>
           )}
+          <div className="hero-actions">
+            <button
+              type="button"
+              className="hero-action"
+              title={working ? '生成中，暂不能上传' : '上传本地图片'}
+              aria-label="上传本地图片"
+              disabled={uploading || working}
+              onClick={() => fileRef.current?.click()}
+            >
+              {uploading ? <span className="spinner tiny" /> : <IconUpload size={14} />}
+            </button>
+            {selected && (
+              <a
+                className="hero-action"
+                href={selected.url}
+                download={
+                  selected.filename || selected.url.split('/').pop() || `shot-${data.no}.png`
+                }
+                title="下载当前图片"
+                aria-label="下载当前图片"
+              >
+                <IconDownload size={14} />
+              </a>
+            )}
+          </div>
+          <input
+            ref={fileRef}
+            className="file-input"
+            type="file"
+            accept="image/png,image/jpeg,image/webp,image/gif,image/avif"
+            onChange={(event) => void pickFile(event)}
+          />
         </div>
 
-        {run.candidates.length > 0 && (
-          <>
-            <div className="strip-head">
-              <span className="eyebrow">TAKES</span>
-              <span className="strip-hint">单击选用 · 双击放大</span>
-            </div>
-            <div className="candidate-strip">
-              {run.candidates.map((candidate, index) => (
-                <button
-                  type="button"
-                  key={candidate.id}
-                  className={`candidate ${candidate.id === run.selectedId ? 'on' : ''}`}
-                  onClick={() => void selectCandidate(node.id, candidate.id)}
-                  onDoubleClick={() => setLightbox({ nodeId: node.id, index })}
-                  title={`候选 ${index + 1} · ${candidate.size}${candidate.seed !== null ? ` · seed ${candidate.seed}` : ''}`}
-                >
-                  <img src={candidate.url} alt="" loading="lazy" />
-                  <span className="candidate-index">{String(index + 1).padStart(2, '0')}</span>
-                </button>
-              ))}
-            </div>
-          </>
-        )}
-
         <div className="deck">
-          <div className="deck-row">
-            <span className="deck-label">张数</span>
-            <div className="segmented">
-              {[1, 2, 4, 8].map((value) => (
-                <button
-                  type="button"
-                  key={value}
-                  className={n === value ? 'on' : ''}
-                  onClick={() => setN(value)}
-                >
-                  {value}
-                </button>
-              ))}
-            </div>
-            <span className="deck-label">SEED</span>
-            <input
-              type="number"
-              className="seed-input"
-              placeholder="随机"
-              value={seed}
-              onChange={(event) => setSeed(event.target.value)}
-            />
-          </div>
-          <div className="deck-row between">
-            <label className="switch">
-              <input
-                type="checkbox"
-                checked={force}
-                onChange={(event) => setForce(event.target.checked)}
-              />
-              <span className="switch-track">
-                <span className="switch-thumb" />
-              </span>
-              强制重跑
-            </label>
-            <span className="deck-hint">
-              {busy && run.progress
-                ? `${run.progress.done}/${run.progress.total}`
-                : dirty
-                  ? '先保存提示词'
-                  : '同参幂等跳过'}
-            </span>
-          </div>
           <button
             type="button"
             className="primary block"
-            disabled={busy || dirty}
-            onClick={() =>
-              void generate(node.id, {
-                n,
-                force,
-                seed: seed.trim() === '' ? undefined : Number(seed),
-              })
-            }
+            disabled={working || dirty || needsKey}
+            aria-busy={working}
+            onClick={() => void submit()}
           >
-            {busy ? `生成中 ${run.progress?.done ?? 0}/${run.progress?.total ?? n}…` : `生成 ${n} 张首帧`}
+            {working && <span className="spinner tiny" />}
+            {busy
+              ? `生成中 ${run.progress?.done ?? 0}/${run.progress?.total ?? 1}…`
+              : submitting
+                ? '正在提交…'
+                : '生成首帧'}
           </button>
-          {run.status === 'error' && <div className="deck-error">{run.error}</div>}
-        </div>
-
-        <div className="tech-line">
-          <span>
-            {selected
-              ? `${selected.provider} · ${selected.model} · ${selected.size}${
-                  selected.seed !== null ? ` · seed ${selected.seed}` : ''
-                }`
-              : `promptHash ${data.promptHash}`}
-          </span>
-          {run.candidates.length > 0 && (
-            <button
-              type="button"
-              className="link-danger"
-              onClick={() => {
-                if (window.confirm('清空当前镜头的候选图记录？（磁盘文件不会删除）')) {
-                  void clearRun(node.id);
-                }
-              }}
-            >
-              清空候选
-            </button>
+          {needsKey ? (
+            <div className="deck-hint">
+              未配置 AIClone Key，
+              <button
+                type="button"
+                className="link-mini"
+                onClick={() => setSettingsOpen(true)}
+              >
+                去系统设置
+              </button>
+            </div>
+          ) : (
+            run.status === 'error' && <div className="deck-error">{run.error}</div>
           )}
         </div>
 
-        <section className="panel">
+        <section className="panel prompt-panel">
           <div className="panel-head">
-            <span className="eyebrow">PROMPT</span>
-            <div className="lang-tabs">
-              <button
-                type="button"
-                className={tab === 'en' ? 'on' : ''}
-                onClick={() => setTab('en')}
-              >
-                EN{form.promptEn ? '' : ' · 空'}
-              </button>
-              <button
-                type="button"
-                className={tab === 'zh' ? 'on' : ''}
-                onClick={() => setTab('zh')}
-              >
-                中文{form.promptZh ? '' : ' · 空'}
-              </button>
-            </div>
-            <button type="button" className="ghost-mini" onClick={copyPrompt}>
-              复制
+            <span className="eyebrow">首帧提示词</span>
+            <button
+              type="button"
+              className="copy-mini"
+              onClick={copyPrompt}
+              title="复制提示词"
+              aria-label="复制提示词"
+            >
+              <IconCopy size={14} />
+            </button>
+          </div>
+          <div className="lang-tabs">
+            <button
+              type="button"
+              className={tab === 'en' ? 'on' : ''}
+              onClick={() => setTab('en')}
+            >
+              EN
+              {config?.promptLang === 'en' && (
+                <i className="tab-use" title="当前送模型" aria-label="当前送模型" />
+              )}
+            </button>
+            <button
+              type="button"
+              className={tab === 'zh' ? 'on' : ''}
+              onClick={() => setTab('zh')}
+            >
+              中文
+              {config?.promptLang === 'zh' && (
+                <i className="tab-use" title="当前送模型" aria-label="当前送模型" />
+              )}
             </button>
           </div>
           <textarea
             className="prompt-area"
-            rows={9}
+            rows={7}
             spellCheck={false}
             value={promptValue}
             onChange={setField(tab === 'en' ? 'promptEn' : 'promptZh')}
           />
           <div className="panel-foot">
-            <span>{promptValue.length} chars</span>
-            {inUse && <span className="in-use">送模型</span>}
+            {inUse ? (
+              <span className="in-use">当前送模型</span>
+            ) : (
+              <span className="foot-warn">
+                生成时发送{config?.promptLang === 'en' ? ' English ' : '中文'}
+                提示词，当前查看的版本不会送模型
+              </span>
+            )}
           </div>
         </section>
 
         <section className="panel">
           <div className="panel-head">
-            <span className="eyebrow">CAPTION</span>
-            <span className="panel-count">{form.caption.length}</span>
+            <span className="eyebrow">分镜文案</span>
           </div>
           <textarea
             className="caption-area"
@@ -313,9 +323,10 @@ export function Inspector() {
 
         <details className="panel collapsible">
           <summary>
-            <span className="eyebrow">NEGATIVE</span>
-            <span className="summary-hint">负面词</span>
-            <span className="chev">›</span>
+            <span className="eyebrow">负面词</span>
+            <span className="chev">
+              <IconChevronRight size={14} />
+            </span>
           </summary>
           <div className="collapsible-body">
             <label className="mini-field">
@@ -336,19 +347,15 @@ export function Inspector() {
                 spellCheck={false}
               />
             </label>
-            <div className="panel-foot">
-              <span>
-                {config?.appendNegative ? '以 Avoid: … 追加到 prompt' : '未开启追加，负面词不会送模型'}
-              </span>
-            </div>
           </div>
         </details>
 
         <details className="panel collapsible">
           <summary>
-            <span className="eyebrow">MOTION</span>
-            <span className="summary-hint">视频提示词 · P1</span>
-            <span className="chev">›</span>
+            <span className="eyebrow">视频提示词</span>
+            <span className="chev">
+              <IconChevronRight size={14} />
+            </span>
           </summary>
           <div className="collapsible-body">
             <pre className="video-prompt">{data.videoPrompt || '（无）'}</pre>
@@ -357,9 +364,7 @@ export function Inspector() {
       </div>
 
       <footer className="inspector-foot">
-        <span className={`foot-note ${dirty ? 'warn' : ''}`}>
-          {dirty ? '有未保存修改' : '已保存'}
-        </span>
+        {dirty && <span className="foot-note warn">有未保存修改</span>}
         <button type="button" disabled={!dirty} onClick={() => setForm(fields(data))}>
           还原
         </button>

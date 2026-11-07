@@ -55,16 +55,41 @@ export interface ProjectEdge {
   kind?: string;
 }
 
+export interface ImageModelOption {
+  id: string;
+  label: string;
+  note?: string;
+}
+
 export interface WorkbenchConfig {
   provider: string;
+  providerLabel: string;
   model: string;
+  models: ImageModelOption[];
   size: string;
   promptLang: 'en' | 'zh';
   appendNegative: boolean;
   dailyCap: number;
   usage: number;
   concurrency: number;
+  maxBatch: number;
   hasKey: boolean;
+  keyHint: string;
+}
+
+export interface SystemSettings {
+  provider: string;
+  providerLabel: string;
+  imageModel: string;
+  models: ImageModelOption[];
+  hasKey: boolean;
+  keyHint: string;
+  promptLang: 'en' | 'zh';
+  size: string;
+  dailyCap: number;
+  usage: number;
+  concurrency: number;
+  maxBatch: number;
 }
 
 export interface ImportStats {
@@ -96,4 +121,43 @@ export interface Project {
 export interface ImportResponse {
   project: Project;
   stats: ImportStats;
+}
+
+export type ExportFit = 'contain' | 'cover';
+export type ExportQuality = 'standard' | 'high';
+export type ExportMotion = 'none' | 'in' | 'out';
+
+export interface ExportOptions {
+  width: number;
+  height: number;
+  fps: number;
+  fit?: ExportFit;
+  quality?: ExportQuality;
+  motion?: ExportMotion;
+  allowMissing: boolean;
+}
+
+export type ExportStatus = 'queued' | 'running' | 'done' | 'error' | 'canceled';
+
+export interface ExportJob {
+  id: string;
+  status: ExportStatus;
+  stage: string;
+  progress: number;
+  error: string | null;
+  url: string | null;
+  filename: string | null;
+  size: number | null;
+  durationSec: number;
+  shots: number;
+  missing: number[];
+  stale: number;
+  options: ExportOptions;
+  createdAt: string;
+  finishedAt: string | null;
+}
+
+export interface ExportList {
+  active: ExportJob | null;
+  jobs: ExportJob[];
 }

@@ -1,8 +1,10 @@
 import { emptyRun, hashPrompt, round2 } from './hash.mjs';
 
-const PX_PER_SECOND = 100;
-const X0 = 120;
-const LANE_Y = { A: 0, B: 820 };
+const GRID_X = 120;
+const GRID_Y = 80;
+const COL_PITCH = 420;
+const ROW_PITCH = 370;
+const GRID_COLS_MAX = 8;
 
 const ALIASES = {
   no: ['镜号', '镜头', '镜头号', 'shot', 'shotno', 'no'],
@@ -131,15 +133,27 @@ export function buildProject(rows, { name, sourceFile } = {}) {
     nodes.push({
       id,
       type: 'shot',
-      position: {
-        x: X0 + startSec * PX_PER_SECOND,
-        y: LANE_Y[anchor],
-      },
+      position: { x: GRID_X, y: GRID_Y },
       data,
     });
   });
 
   const ordered = [...nodes].sort((a, b) => a.data.startSec - b.data.startSec);
+  const cols = Math.min(
+    GRID_COLS_MAX,
+    Math.max(4, Math.ceil(Math.sqrt(ordered.length * 1.4))),
+  );
+  // 蛇形折行，保证相邻镜头在画布上仍然相邻
+  ordered.forEach((node, i) => {
+    const row = Math.floor(i / cols);
+    const colInRow = i % cols;
+    const col = row % 2 === 0 ? colInRow : cols - 1 - colInRow;
+    node.position = {
+      x: GRID_X + col * COL_PITCH,
+      y: GRID_Y + row * ROW_PITCH,
+    };
+  });
+
   const edges = [];
   for (let i = 1; i < ordered.length; i += 1) {
     edges.push({

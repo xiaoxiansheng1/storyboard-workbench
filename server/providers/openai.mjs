@@ -1,29 +1,4 @@
-import { sniffExt } from '../assets.mjs';
-
-function mimeFor(data) {
-  const ext = sniffExt(data);
-  if (ext === 'jpg') return 'image/jpeg';
-  if (ext === 'webp') return 'image/webp';
-  if (ext === 'svg') return 'image/svg+xml';
-  return 'image/png';
-}
-
-function decodeBase64(value) {
-  const raw = String(value).includes(',') ? String(value).split(',').pop() : String(value);
-  return Buffer.from(raw, 'base64');
-}
-
-async function download(url, timeoutMs) {
-  const absolute = url.startsWith('data:') ? url : new URL(url).toString();
-  if (absolute.startsWith('data:')) {
-    const mime = /^data:([^;,]+)/.exec(absolute)?.[1] || 'image/png';
-    return { data: decodeBase64(absolute), mime };
-  }
-  const res = await fetch(absolute, { signal: AbortSignal.timeout(timeoutMs) });
-  if (!res.ok) throw new Error(`图片下载失败 HTTP ${res.status}`);
-  const data = Buffer.from(await res.arrayBuffer());
-  return { data, mime: res.headers.get('content-type') || 'image/png' };
-}
+import { decodeBase64, downloadImage, mimeFor } from './download.mjs';
 
 export function createOpenAIProvider(config) {
   const { baseUrl, apiKey, model, size, quality, responseFormat, extraHeaders, extraBody } = config.openai;
@@ -69,7 +44,7 @@ export function createOpenAIProvider(config) {
         const data = decodeBase64(item.b64_json);
         return { data, mime: mimeFor(data) };
       }
-      if (item.url) return download(new URL(item.url, `${baseUrl}/`).toString(), timeoutMs);
+      if (item.url) return downloadImage(new URL(item.url, `${baseUrl}/`).toString(), timeoutMs);
 
       throw new Error(`响应格式无法识别（既无 b64_json 也无 url）：${text.slice(0, 300)}`);
     },

@@ -41,20 +41,30 @@ function bool(raw, fallback) {
 loadEnv(path.join(ROOT, '.env'));
 
 const env = process.env;
+const dataDir = path.resolve(ROOT, env.DATA_DIR || 'data');
 
 export const config = {
   root: ROOT,
   host: '127.0.0.1',
   port: Number(env.PORT || 8787),
-  dataDir: path.resolve(ROOT, env.DATA_DIR || 'data'),
+  dataDir,
+  exportDir: path.join(dataDir, 'exports'),
+  ffmpegPath: env.FFMPEG_PATH || 'ffmpeg',
   webDist: path.join(ROOT, 'web', 'dist'),
-  provider: (env.IMAGE_PROVIDER || 'mock').toLowerCase(),
-  promptLang: (env.PROMPT_LANG || 'en').toLowerCase() === 'zh' ? 'zh' : 'en',
+  provider: (env.IMAGE_PROVIDER || 'aiclone').toLowerCase(),
+  promptLang: (env.PROMPT_LANG || 'zh').toLowerCase() === 'en' ? 'en' : 'zh',
   appendNegative: bool(env.APPEND_NEGATIVE, true),
   concurrency: Math.max(1, Math.min(8, Number(env.IMAGE_CONCURRENCY) || 2)),
   timeoutMs: Math.max(10000, Number(env.IMAGE_TIMEOUT_MS) || 180000),
   dailyCap: Math.max(1, Number(env.DAILY_IMAGE_CAP) || 200),
+  maxBatch: Math.max(1, Math.min(500, Number(env.MAX_BATCH_SIZE) || 50)),
   requestSeed: bool(env.REQUEST_SEED, false),
+  aiclone: {
+    baseUrl: (env.AICLONE_BASE_URL || 'https://api.aiclonevoicefree.com').replace(/\/+$/, ''),
+    apiKey: env.AICLONE_API_KEY || '',
+    model: env.AICLONE_IMAGE_MODEL || 'gpt-image-2',
+    pollMs: Math.max(20, Number(env.AICLONE_POLL_MS) || 2000),
+  },
   openai: {
     baseUrl: (env.OPENAI_BASE_URL || 'https://api.openai.com/v1').replace(/\/+$/, ''),
     apiKey: env.OPENAI_API_KEY || '',
