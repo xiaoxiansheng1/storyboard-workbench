@@ -43,13 +43,21 @@ loadEnv(path.join(ROOT, '.env'));
 const env = process.env;
 const dataDir = path.resolve(ROOT, env.DATA_DIR || 'data');
 
+function siblingTool(bin, name) {
+  if (!/ffmpeg/i.test(path.basename(bin))) return name;
+  return path.join(path.dirname(bin), path.basename(bin).replace(/ffmpeg/i, name));
+}
+
+const ffmpegPath = env.FFMPEG_PATH || 'ffmpeg';
+
 export const config = {
   root: ROOT,
   host: '127.0.0.1',
   port: Number(env.PORT || 8787),
   dataDir,
   exportDir: path.join(dataDir, 'exports'),
-  ffmpegPath: env.FFMPEG_PATH || 'ffmpeg',
+  ffmpegPath,
+  ffprobePath: env.FFPROBE_PATH || siblingTool(ffmpegPath, 'ffprobe'),
   webDist: path.join(ROOT, 'web', 'dist'),
   provider: (env.IMAGE_PROVIDER || 'aiclone').toLowerCase(),
   promptLang: (env.PROMPT_LANG || 'zh').toLowerCase() === 'en' ? 'en' : 'zh',
@@ -64,6 +72,13 @@ export const config = {
     apiKey: env.AICLONE_API_KEY || '',
     model: env.AICLONE_IMAGE_MODEL || 'gpt-image-2',
     pollMs: Math.max(20, Number(env.AICLONE_POLL_MS) || 2000),
+  },
+  audio: {
+    baseUrl: (env.INDEXTTS_BASE_URL || 'http://127.0.0.1:7860').replace(/\/+$/, ''),
+    endpoint: env.INDEXTTS_ENDPOINT || 'gen_single',
+    timeoutMs: Math.max(30000, Number(env.INDEXTTS_TIMEOUT_MS) || 600000),
+    concurrency: Math.max(1, Math.min(4, Number(env.AUDIO_CONCURRENCY) || 1)),
+    voiceDir: path.join(dataDir, 'voice'),
   },
   openai: {
     baseUrl: (env.OPENAI_BASE_URL || 'https://api.openai.com/v1').replace(/\/+$/, ''),

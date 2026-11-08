@@ -7,18 +7,20 @@ const clampInt = (value, min, max, fallback) => {
   return Math.max(min, Math.min(max, Math.trunc(n)));
 };
 
-export function createJobs({ store, getProvider, config, broadcast }) {
+export function createJobs({ store, getProvider, config, broadcast, projectId, assetBase = '/assets' }) {
   const queue = [];
   const queued = new Set();
   const running = new Set();
   let active = 0;
+  let closed = false;
 
   function signatureFor(node, n, provider) {
     return `${node.data.promptHash}|${provider.name}:${provider.model}|${config.openai.size}|${config.promptLang}|${n}`;
   }
 
   function emit(node) {
-    broadcast({ type: 'run', nodeId: node.id, run: node.data.run, usage: store.usageCount() });
+    if (closed) return;
+    broadcast({ type: 'run', projectId, nodeId: node.id, run: node.data.run, usage: store.usageCount() });
   }
 
   function isSatisfied(node, n, provider) {
@@ -40,6 +42,7 @@ export function createJobs({ store, getProvider, config, broadcast }) {
   }
 
   function enqueue(nodeIds, options = {}) {
+    if (closed) return { queued: 0, skipped: nodeIds.length };
     const n = clampInt(options.n, 1, 8, 1);
     const force = Boolean(options.force);
     const seed = Number.isFinite(Number(options.seed)) && options.seed !== null && options.seed !== ''
@@ -52,7 +55,7 @@ export function createJobs({ store, getProvider, config, broadcast }) {
 
     for (const id of nodeIds) {
       const node = store.node(id);
-      if (!node) {
+      if (!node || node.type !== 'shot') {
         skipped += 1;
         continue;
       }
@@ -82,6 +85,7 @@ export function createJobs({ store, getProvider, config, broadcast }) {
   }
 
   function pump() {
+    if (closed) return;
     while (active < config.concurrency && queue.length) {
       const job = queue.shift();
       queued.delete(job.nodeId);
@@ -89,6 +93,7 @@ export function createJobs({ store, getProvider, config, broadcast }) {
       active += 1;
       execute(job)
         .catch((error) => {
+          if (closed) return;
           const node = store.node(job.nodeId);
           if (!node) return;
           node.data.run.status = 'error';
@@ -108,6 +113,7 @@ export function createJobs({ store, getProvider, config, broadcast }) {
   }
 
   async function execute(job) {
+    if (closed) throw new Error('项目已删除');
     const node = store.node(job.nodeId);
     if (!node) return;
     const data = node.data;
@@ -131,6 +137,7 @@ export function createJobs({ store, getProvider, config, broadcast }) {
     if (!prompt.trim()) throw new Error('提示词为空，无法生成');
 
     for (let i = 0; i < job.n; i += 1) {
+      if (closed) throw new Error('项目已删除');
       if (store.usageCount() >= config.dailyCap) {
         throw new Error(`今日生成上限（${config.dailyCap} 张）已用完，请明天再跑或在系统设置里调高每日上限`);
       }
@@ -152,8 +159,9 @@ export function createJobs({ store, getProvider, config, broadcast }) {
       });
 
       if (!result?.data?.length) throw new Error('供应商没有返回图片数据');
+      if (closed) throw new Error('项目已删除');
 
-      const asset = saveAsset(store.assetsDir, node.id, result);
+      const asset = saveAsset(store.assetsDir, node.id, result, assetBase);
       const candidate = {
         id: asset.id,
         url: asset.url,
@@ -190,5 +198,11 @@ export function createJobs({ store, getProvider, config, broadcast }) {
     store.save();
   }
 
-  return { enqueue, refresh: pump };
+  function close() {
+    closed = true;
+    queue.length = 0;
+    queued.clear();
+  }
+
+  return { enqueue, refresh: pump, close };
 }

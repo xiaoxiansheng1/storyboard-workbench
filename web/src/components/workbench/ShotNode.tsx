@@ -1,6 +1,6 @@
 import { Handle, Position, type Node, type NodeProps } from '@xyflow/react';
-import type { ShotData } from '../types';
-import { IconImage } from './icons';
+import type { ShotData } from '../../types';
+import { Film, Image as ImageIcon } from 'lucide-react';
 
 function shortTime(timecode: string): string {
   return String(timecode || '').replace(/^00:/, '').replace(',', '.');
@@ -16,6 +16,7 @@ export function ShotNode({ data, selected }: NodeProps<Node<ShotData>>) {
     run.candidates.findIndex((candidate) => candidate.id === run.selectedId),
   );
   const selectedCandidate = run.candidates[selectedIndex] || null;
+  const video = data.video || null;
   const progress =
     run.progress && run.progress.total
       ? Math.round((run.progress.done / run.progress.total) * 100)
@@ -36,12 +37,14 @@ export function ShotNode({ data, selected }: NodeProps<Node<ShotData>>) {
   }
 
   const tone = run.status === 'error' ? 'is-error' : busy ? 'is-running' : stale ? 'is-stale' : '';
+  const enterDelay = Math.min((data.no - 1) * 16, 360);
 
   return (
     <div
       className={`shot-node ${data.anchor === 'B' ? 'anchor-b' : 'anchor-a'} ${
         selected ? 'is-selected' : ''
       } ${tone}`}
+      style={{ animationDelay: `${enterDelay}ms` }}
     >
       <Handle type="target" position={Position.Left} className="port" />
 
@@ -60,7 +63,16 @@ export function ShotNode({ data, selected }: NodeProps<Node<ShotData>>) {
           </span>
         </header>
 
-        <div className="node-frame" title={selectedCandidate ? `镜头 ${data.no} 首帧` : '还没有首帧'}>
+        <div
+          className="node-frame"
+          title={
+            video
+              ? `镜头 ${data.no} 已上传视频，合成时优先使用`
+              : selectedCandidate
+                ? `镜头 ${data.no} 首帧`
+                : '还没有首帧'
+          }
+        >
           {selectedCandidate ? (
             <img src={selectedCandidate.url} alt={`镜头 ${data.no}`} loading="lazy" draggable={false} />
           ) : busy ? (
@@ -74,10 +86,18 @@ export function ShotNode({ data, selected }: NodeProps<Node<ShotData>>) {
               </span>
               <span className="scan" />
             </div>
+          ) : video?.posterUrl ? (
+            <img
+              className="is-poster"
+              src={video.posterUrl}
+              alt={`镜头 ${data.no} 视频`}
+              loading="lazy"
+              draggable={false}
+            />
           ) : (
             <div className="frame-empty">
               <span className="frame-glyph">
-                <IconImage size={30} />
+                <ImageIcon size={30} />
               </span>
               <span className="frame-empty-label">首帧未生成</span>
             </div>
@@ -107,6 +127,16 @@ export function ShotNode({ data, selected }: NodeProps<Node<ShotData>>) {
           {!busy && flagLabel && (
             <span className={`node-flag ${flagTone}`} title={flagTitle}>
               {flagLabel}
+            </span>
+          )}
+
+          {video && (
+            <span
+              className="node-video"
+              title={`已上传视频 ${video.durationSec.toFixed(2)}s，合成时优先使用`}
+            >
+              <Film size={11} />
+              {video.durationSec.toFixed(1)}s
             </span>
           )}
         </div>

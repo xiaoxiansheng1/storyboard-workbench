@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { Node } from '@xyflow/react';
-import { useWorkbench } from '../store';
-import type { ShotData, WorkbenchConfig } from '../types';
-import { IconClose } from './icons';
+import { useWorkbench } from '../../store';
+import type { ShotData, WorkbenchConfig } from '../../types';
+import { Modal } from '../common/Modal';
+import { Button } from '../common/Button';
 
 type ShotState = { tone: 'ready' | 'todo' | 'busy'; label: string; framed: boolean };
 
@@ -53,17 +54,11 @@ export function BatchDialog() {
     if (open) setForce(false);
   }, [open]);
 
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setOpen(false);
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [open, setOpen]);
-
   const selected = useMemo(
-    () => nodes.filter((node) => node.selected).sort((a, b) => a.data.no - b.data.no),
+    () =>
+      nodes
+        .filter((node): node is Node<ShotData> => node.type !== 'audio' && Boolean(node.selected))
+        .sort((a, b) => a.data.no - b.data.no),
     [nodes],
   );
 
@@ -79,18 +74,27 @@ export function BatchDialog() {
   const canStart = planned > 0 && !busy && !overBatch;
 
   return (
-    <div className="overlay" onClick={() => setOpen(false)}>
-      <div className="modal batch-modal" onClick={(event) => event.stopPropagation()}>
-        <div className="modal-head">
-          <div>
-            <h2>批量生成首帧</h2>
-          </div>
-          <button type="button" className="icon-btn" onClick={() => setOpen(false)} title="关闭">
-            <IconClose size={15} />
-          </button>
-        </div>
-
-        <div className="batch-stats">
+    <Modal
+      title="批量生成首帧"
+      onClose={() => setOpen(false)}
+      footer={
+        <>
+          <Button type="button" onClick={() => setOpen(false)}>
+            取消
+          </Button>
+          <Button
+            type="button"
+            variant="primary"
+            disabled={!canStart}
+            aria-busy={busy || undefined}
+            onClick={() => void batchNodes(selected.map((node) => node.id), force)}
+          >
+            {busy ? '提交中…' : force ? `重新生成 ${planned} 个镜头` : `生成 ${planned} 个镜头`}
+          </Button>
+        </>
+      }
+    >
+      <div className="batch-stats">
           <div className="batch-stat">
             <b>{selected.length}</b>
             <span>已选镜头</span>
@@ -118,13 +122,13 @@ export function BatchDialog() {
         </div>
 
         <p className="modal-note">
-          默认只生成没有首帧、提示词已改、模型或尺寸变化、上次失败的镜头；正在生成或排队的会自动跳过。
-          {running > 0 && <span className="warn"> 其中 {running} 个正在生成，本次不会重复提交。</span>}
+          默认只生成需要更新的镜头，生成中或排队的会跳过。
+          {running > 0 && <span className="warn"> 其中 {running} 个正在生成。</span>}
         </p>
 
         {overBatch && (
           <p className="batch-warning">
-            单次批量最多 {maxBatch} 个镜头，当前已选 {selected.length} 个。请减少选择，或到系统设置调高上限。
+            单次最多 {maxBatch} 个镜头，请减少选择或在系统设置中调高上限。
           </p>
         )}
 
@@ -136,22 +140,6 @@ export function BatchDialog() {
           />
           <span>已有首帧也重新生成</span>
         </label>
-
-        <div className="modal-actions">
-          <button type="button" onClick={() => setOpen(false)}>
-            取消
-          </button>
-          <button
-            type="button"
-            className="primary"
-            disabled={!canStart}
-            aria-busy={busy || undefined}
-            onClick={() => void batchNodes(selected.map((node) => node.id), force)}
-          >
-            {busy ? '提交中…' : force ? `重新生成 ${planned} 个镜头` : `生成 ${planned} 个镜头`}
-          </button>
-        </div>
-      </div>
-    </div>
+    </Modal>
   );
 }

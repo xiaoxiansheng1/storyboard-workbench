@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type DragEvent } from 'react';
-import { useWorkbench } from '../store';
-import type { ImportResponse } from '../types';
-import { IconClose } from './icons';
+import { useWorkbench } from '../../store';
+import type { ImportResponse } from '../../types';
+import { Modal } from '../common/Modal';
+import { Button } from '../common/Button';
 
 type Stage = 'pick' | 'preview' | 'done';
 
@@ -47,15 +48,6 @@ export function ImportDialog() {
     setDragging(false);
     setResult(null);
   }, [open]);
-
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && !busy) setOpen(false);
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [open, busy, setOpen]);
 
   if (!open) return null;
 
@@ -115,19 +107,33 @@ export function ImportDialog() {
   );
 
   return (
-    <div className="overlay" onClick={close}>
-      <div className={`modal import-modal ${stage}`} onClick={(event) => event.stopPropagation()}>
-        <div className="modal-head">
-          <div>
-            <h2>
-              {stage === 'done' ? '导入完成' : stage === 'preview' ? '确认导入' : '导入分镜 CSV'}
-            </h2>
-          </div>
-          <button type="button" className="icon-btn" onClick={close} title="关闭">
-            <IconClose size={15} />
-          </button>
-        </div>
-
+    <Modal
+      title={stage === 'done' ? '导入完成' : stage === 'preview' ? '确认导入' : '导入分镜 CSV'}
+      onClose={close}
+      size="lg"
+      closeDisabled={busy}
+      footer={
+        stage === 'preview' ? (
+          <>
+            <Button type="button" onClick={close}>
+              取消
+            </Button>
+            <Button
+              type="button"
+              variant="primary"
+              disabled={busy || !text.trim()}
+              onClick={() => void submit()}
+            >
+              {busy ? '导入中…' : '导入并重建画布'}
+            </Button>
+          </>
+        ) : stage === 'done' ? (
+          <Button type="button" variant="primary" onClick={close}>
+            完成
+          </Button>
+        ) : undefined
+      }
+    >
         {stage === 'pick' && (
           <>
             <div
@@ -148,11 +154,11 @@ export function ImportDialog() {
               <span className="dropzone-title">
                 {reading ? '正在读取…' : '拖入 CSV 文件，或点击选择'}
               </span>
-              <span className="dropzone-hint">支持导出的 11 列分镜表</span>
+              <span className="dropzone-hint">11 列分镜表</span>
               <span className="dropzone-action">选择文件</span>
             </div>
             <p className="modal-note">
-              导入会替换当前画布，提示词未变的镜头会保留已生成的图。
+              导入会替换当前画布，提示词未变的镜头保留已生成的图。
               {nodeCount > 0 && <span className="warn"> 当前已有 {nodeCount} 个镜头。</span>}
             </p>
           </>
@@ -167,15 +173,18 @@ export function ImportDialog() {
                   {formatSize(fileSize)} · {text.split(/\r?\n/).filter(Boolean).length} 行
                 </span>
               </div>
-              <button type="button" onClick={() => inputRef.current?.click()}>
+              <Button
+                type="button"
+                className="import-reselect"
+                onClick={() => inputRef.current?.click()}
+              >
                 重新选择
-              </button>
+              </Button>
             </div>
 
-            <p className="modal-note">
-              导入会替换当前画布，提示词未变的镜头会保留已生成的图。
-              {nodeCount > 0 && <span className="warn"> 当前已有 {nodeCount} 个镜头。</span>}
-            </p>
+            {nodeCount > 0 && (
+              <p className="modal-note warn">将替换当前画布的 {nodeCount} 个镜头。</p>
+            )}
 
             <label className="field">
               <span>项目名称</span>
@@ -190,20 +199,6 @@ export function ImportDialog() {
             <div className="field">
               <span>CSV 内容</span>
               <pre className="csv-preview">{text}</pre>
-            </div>
-
-            <div className="modal-actions">
-              <button type="button" onClick={close}>
-                取消
-              </button>
-              <button
-                type="button"
-                className="primary"
-                disabled={busy || !text.trim()}
-                onClick={() => void submit()}
-              >
-                {busy ? '导入中…' : '导入并重建画布'}
-              </button>
             </div>
           </>
         )}
@@ -242,17 +237,10 @@ export function ImportDialog() {
                 </ul>
               )}
             </div>
-
-            <div className="modal-actions">
-              <button type="button" className="primary" onClick={close}>
-                完成
-              </button>
-            </div>
           </>
         )}
 
-        {fileInput}
-      </div>
-    </div>
+      {fileInput}
+    </Modal>
   );
 }

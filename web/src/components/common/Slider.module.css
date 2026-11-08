@@ -1,0 +1,65 @@
+.root {
+  position: relative;
+  width: 100%;
+  height: 18px;
+  flex: 1;
+  min-width: 0;
+  cursor: pointer;
+  touch-action: none;
+  user-select: none;
+  outline: none;
+}
+
+.root[aria-disabled='true'] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.track {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 4px;
+  margin-top: -2px;
+  border-radius: 999px;
+  background: var(--line-2);
+}
+
+.fill {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  height: 4px;
+  margin-top: -2px;
+  width: calc(var(--ratio) * 100%);
+  border-radius: 999px;
+  background: var(--audio);
+  pointer-events: none;
+}
+
+.thumb {
+  position: absolute;
+  top: 50%;
+  left: calc(4px + (100% - 8px) * var(--ratio));
+  width: 10px;
+  height: 10px;
+  margin: -5px 0 0 -5px;
+  border-radius: 50%;
+  background: var(--audio);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.28);
+  pointer-events: none;
+  transition: box-shadow 0.16s ease;
+}
+
+.root:hover .thumb {
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--audio) 16%, transparent),
+    0 1px 4px rgba(0, 0, 0, 0.28);
+}
+
+.root:focus-visible .thumb {
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--audio) 32%, transparent),
+    0 1px 4px rgba(0, 0, 0, 0.28);
+}

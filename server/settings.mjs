@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-const FIELDS = ['provider', 'imageModel', 'apiKey', 'promptLang'];
+const FIELDS = ['provider', 'imageModel', 'apiKey', 'promptLang', 'audioBaseUrl'];
 
 export const SETTING_LIMITS = {
   concurrency: [1, 8],

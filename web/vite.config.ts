@@ -24,6 +24,7 @@ export default defineConfig({
     proxy: {
       '/api': `http://127.0.0.1:${apiPort()}`,
       '/assets': `http://127.0.0.1:${apiPort()}`,
+      '/exports': `http://127.0.0.1:${apiPort()}`,
     },
   },
   build: {

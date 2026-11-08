@@ -1,14 +1,10 @@
 import { useEffect, useRef, useState, type ChangeEvent } from 'react';
-import { useWorkbench } from '../store';
-import type { ShotData } from '../types';
-import {
-  IconChevronRight,
-  IconClose,
-  IconCopy,
-  IconDownload,
-  IconImage,
-  IconUpload,
-} from './icons';
+import type { Node } from '@xyflow/react';
+import { useWorkbench } from '../../store';
+import type { ShotData } from '../../types';
+import { ChevronRight, Copy, Download, Film, Image as ImageIcon, Trash2, Upload, X } from 'lucide-react';
+import { Button } from '../common/Button';
+import { Segmented } from '../common/Segmented';
 
 interface FormState {
   caption: string;
@@ -17,6 +13,11 @@ interface FormState {
   negativeZh: string;
   negativeEn: string;
 }
+
+const LANG_OPTIONS: { value: 'en' | 'zh'; label: string }[] = [
+  { value: 'en', label: 'EN' },
+  { value: 'zh', label: '中文' },
+];
 
 function fields(data: ShotData): FormState {
   return {
@@ -28,9 +29,7 @@ function fields(data: ShotData): FormState {
   };
 }
 
-export function Inspector() {
-  const selectedId = useWorkbench((s) => s.selectedId);
-  const node = useWorkbench((s) => s.nodes.find((n) => n.id === selectedId) || null);
+export function ShotInspector({ node }: { node: Node<ShotData> }) {
   const config = useWorkbench((s) => s.project?.config);
   const patchNode = useWorkbench((s) => s.patchNode);
   const generate = useWorkbench((s) => s.generate);
@@ -38,10 +37,14 @@ export function Inspector() {
   const selectNode = useWorkbench((s) => s.selectNode);
   const setSettingsOpen = useWorkbench((s) => s.setSettingsOpen);
   const uploadImage = useWorkbench((s) => s.uploadImage);
+  const uploadVideo = useWorkbench((s) => s.uploadVideo);
+  const removeVideo = useWorkbench((s) => s.removeVideo);
   const notify = useWorkbench((s) => s.notify);
 
   const fileRef = useRef<HTMLInputElement>(null);
+  const videoFileRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
+  const [uploadingVideo, setUploadingVideo] = useState(false);
 
   const [form, setForm] = useState<FormState>({
     caption: '',
@@ -52,7 +55,9 @@ export function Inspector() {
   });
   const [tab, setTab] = useState<'en' | 'zh'>('zh');
   const [submitting, setSubmitting] = useState(false);
+  const [mediaTab, setMediaTab] = useState<'image' | 'video'>('image');
   const busy = node ? node.data.run.status === 'queued' || node.data.run.status === 'running' : false;
+  const video = node?.data.video || null;
 
   useEffect(() => {
     if (!node) return;
@@ -65,6 +70,17 @@ export function Inspector() {
   useEffect(() => {
     if (busy) setSubmitting(false);
   }, [busy, node?.id]);
+
+  useEffect(() => {
+    const current = node?.data;
+    if (!current) return;
+    setMediaTab(current.video && current.run.candidates.length === 0 ? 'video' : 'image');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [node?.id]);
+
+  useEffect(() => {
+    if (!video) setMediaTab('image');
+  }, [video]);
 
   if (!node) return null;
 
@@ -87,6 +103,7 @@ export function Inspector() {
   const negativeValue = tab === 'en' ? form.negativeEn : form.negativeZh;
   const inUse = config?.promptLang === tab;
   const working = busy || submitting;
+  const showVideo = mediaTab === 'video' && Boolean(video);
 
   const submit = async () => {
     if (working || dirty || needsKey) return;
@@ -120,10 +137,41 @@ export function Inspector() {
     setUploading(true);
     try {
       await uploadImage(node.id, file);
+      setMediaTab('image');
     } finally {
       setUploading(false);
     }
   };
+
+  const pickVideo = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    setUploadingVideo(true);
+    try {
+      await uploadVideo(node.id, file);
+      setMediaTab('video');
+    } finally {
+      setUploadingVideo(false);
+    }
+  };
+
+  const slot = data.duration;
+  const available = video ? Math.max(0, video.durationSec - video.inPoint) : 0;
+  let alignLabel = '';
+  let alignTone = '';
+  if (video) {
+    if (available >= slot - 0.01) {
+      alignLabel = `截取 ${slot.toFixed(2)}s`;
+      alignTone = 'ok';
+    } else if (available >= slot * 0.9) {
+      alignLabel = `略短，放慢补齐`;
+      alignTone = 'warn';
+    } else {
+      alignLabel = `偏短，尾部定格 ${(slot - available).toFixed(2)}s`;
+      alignTone = 'warn';
+    }
+  }
 
   return (
     <aside className="inspector">
@@ -142,18 +190,70 @@ export function Inspector() {
             </div>
           </div>
         </div>
-        <button type="button" className="icon-btn" onClick={() => selectNode(null)} title="关闭">
-          <IconClose size={15} />
-        </button>
+        <Button variant="icon" type="button" onClick={() => selectNode(null)} title="关闭">
+          <X size={15} />
+        </Button>
       </header>
 
       <div className="inspector-scroll">
-        <div className={`hero ${selected ? '' : 'is-empty'} ${working && !selected ? 'is-loading' : ''}`}>
-          {selected ? (
+        <section className="media">
+          {video && (
+            <div className="media-head">
+              <Segmented
+                label="预览内容"
+                value={mediaTab}
+                onChange={(value) => setMediaTab(value)}
+                options={[
+                  { value: 'image', label: '首帧' },
+                  { value: 'video', label: '视频' },
+                ]}
+              />
+              <div className="media-head-right">
+                {mediaTab === 'video' && (
+                  <span className="video-dims">
+                    {video.width}×{video.height}
+                  </span>
+                )}
+                {mediaTab === 'video' && (
+                  <Button
+                    type="button"
+                    className="copy-mini"
+                    title="移除镜头视频"
+                    aria-label="移除镜头视频"
+                    onClick={() => void removeVideo(node.id)}
+                  >
+                    <Trash2 size={13} />
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
+
+          <div
+            className={`hero ${
+              selected || (!working && video?.posterUrl) || showVideo ? '' : 'is-empty'
+            } ${working && !selected && !showVideo ? 'is-loading' : ''}`}
+          >
+          {showVideo && video ? (
+            <video
+              className="hero-video"
+              src={video.url}
+              poster={video.posterUrl || undefined}
+              controls
+              playsInline
+              preload="metadata"
+            />
+          ) : selected ? (
             <img
               src={selected.url}
               alt={`镜头 ${data.no}`}
               onClick={() => setLightbox({ nodeId: node.id, index: selectedIndex })}
+            />
+          ) : !working && video?.posterUrl ? (
+            <img
+              className="is-poster"
+              src={video.posterUrl}
+              alt={`镜头 ${data.no} 视频`}
             />
           ) : (
             <div className={`hero-empty ${working ? 'is-loading' : ''}`}>
@@ -161,7 +261,7 @@ export function Inspector() {
                 <span className="spinner" />
               ) : (
                 <span className="hero-glyph">
-                  <IconImage size={26} />
+                  <ImageIcon size={26} />
                 </span>
               )}
               <span>
@@ -181,8 +281,8 @@ export function Inspector() {
               {working && <span className="scan" />}
             </div>
           )}
-          {selected && <div className="hero-shade" />}
-          {selected && working && (
+          {selected && !showVideo && <div className="hero-shade" />}
+          {selected && working && !showVideo && (
             <div className="hero-loading">
               <span className="marquee" aria-hidden="true">
                 <span>AI 正在绘制 · GENERATING · AI 正在绘制 · GENERATING ·&nbsp;</span>
@@ -190,8 +290,13 @@ export function Inspector() {
               <span className="scan" />
             </div>
           )}
+          {showVideo && video && (
+            <span className={`media-tag ${alignTone}`}>
+              {video.durationSec.toFixed(2)}s · {alignLabel}
+            </span>
+          )}
           <div className="hero-actions">
-            <button
+            <Button
               type="button"
               className="hero-action"
               title={working ? '生成中，暂不能上传' : '上传本地图片'}
@@ -199,8 +304,18 @@ export function Inspector() {
               disabled={uploading || working}
               onClick={() => fileRef.current?.click()}
             >
-              {uploading ? <span className="spinner tiny" /> : <IconUpload size={14} />}
-            </button>
+              {uploading ? <span className="spinner tiny" /> : <Upload size={14} />}
+            </Button>
+            <Button
+              type="button"
+              className={`hero-action ${video ? 'is-on' : ''}`}
+              title={video ? '替换镜头视频' : '上传镜头视频'}
+              aria-label={video ? '替换镜头视频' : '上传镜头视频'}
+              disabled={uploadingVideo}
+              onClick={() => videoFileRef.current?.click()}
+            >
+              {uploadingVideo ? <span className="spinner tiny" /> : <Film size={14} />}
+            </Button>
             {selected && (
               <a
                 className="hero-action"
@@ -211,7 +326,7 @@ export function Inspector() {
                 title="下载当前图片"
                 aria-label="下载当前图片"
               >
-                <IconDownload size={14} />
+                <Download size={14} />
               </a>
             )}
           </div>
@@ -222,12 +337,21 @@ export function Inspector() {
             accept="image/png,image/jpeg,image/webp,image/gif,image/avif"
             onChange={(event) => void pickFile(event)}
           />
-        </div>
+          <input
+            ref={videoFileRef}
+            className="file-input"
+            type="file"
+            accept="video/mp4,video/quicktime,video/webm,video/x-matroska,video/ogg"
+            onChange={(event) => void pickVideo(event)}
+          />
+          </div>
+        </section>
 
         <div className="deck">
-          <button
+          <Button
             type="button"
-            className="primary block"
+            variant="primary"
+            block
             disabled={working || dirty || needsKey}
             aria-busy={working}
             onClick={() => void submit()}
@@ -238,17 +362,17 @@ export function Inspector() {
               : submitting
                 ? '正在提交…'
                 : '生成首帧'}
-          </button>
+          </Button>
           {needsKey ? (
             <div className="deck-hint">
               未配置 AIClone Key，
-              <button
+              <Button
                 type="button"
                 className="link-mini"
                 onClick={() => setSettingsOpen(true)}
               >
                 去系统设置
-              </button>
+              </Button>
             </div>
           ) : (
             run.status === 'error' && <div className="deck-error">{run.error}</div>
@@ -258,37 +382,24 @@ export function Inspector() {
         <section className="panel prompt-panel">
           <div className="panel-head">
             <span className="eyebrow">首帧提示词</span>
-            <button
+            <Button
               type="button"
               className="copy-mini"
               onClick={copyPrompt}
               title="复制提示词"
               aria-label="复制提示词"
             >
-              <IconCopy size={14} />
-            </button>
+              <Copy size={14} />
+            </Button>
           </div>
-          <div className="lang-tabs">
-            <button
-              type="button"
-              className={tab === 'en' ? 'on' : ''}
-              onClick={() => setTab('en')}
-            >
-              EN
-              {config?.promptLang === 'en' && (
-                <i className="tab-use" title="当前送模型" aria-label="当前送模型" />
-              )}
-            </button>
-            <button
-              type="button"
-              className={tab === 'zh' ? 'on' : ''}
-              onClick={() => setTab('zh')}
-            >
-              中文
-              {config?.promptLang === 'zh' && (
-                <i className="tab-use" title="当前送模型" aria-label="当前送模型" />
-              )}
-            </button>
+          <div className="prompt-lang">
+            <Segmented
+              block
+              label="提示词语言"
+              options={LANG_OPTIONS}
+              value={tab}
+              onChange={(value) => setTab(value)}
+            />
           </div>
           <textarea
             className="prompt-area"
@@ -325,7 +436,7 @@ export function Inspector() {
           <summary>
             <span className="eyebrow">负面词</span>
             <span className="chev">
-              <IconChevronRight size={14} />
+              <ChevronRight size={14} />
             </span>
           </summary>
           <div className="collapsible-body">
@@ -354,7 +465,7 @@ export function Inspector() {
           <summary>
             <span className="eyebrow">视频提示词</span>
             <span className="chev">
-              <IconChevronRight size={14} />
+              <ChevronRight size={14} />
             </span>
           </summary>
           <div className="collapsible-body">
@@ -365,17 +476,17 @@ export function Inspector() {
 
       <footer className="inspector-foot">
         {dirty && <span className="foot-note warn">有未保存修改</span>}
-        <button type="button" disabled={!dirty} onClick={() => setForm(fields(data))}>
+        <Button type="button" disabled={!dirty} onClick={() => setForm(fields(data))}>
           还原
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
-          className="primary"
+          variant="primary"
           disabled={!dirty}
           onClick={() => void patchNode(node.id, { ...form })}
         >
           保存修改
-        </button>
+        </Button>
       </footer>
     </aside>
   );

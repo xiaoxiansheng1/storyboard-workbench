@@ -1,0 +1,79 @@
+/* 零特异性：上下文样式用普通类即可覆盖，不依赖样式注入顺序 */
+:where(.button) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 13px;
+  border: 1px solid var(--line-2);
+  border-radius: 8px;
+  background: var(--btn-bg);
+  color: var(--text-2);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  transition: background 0.14s ease, border-color 0.14s ease, color 0.14s ease;
+}
+
+:where(.button):hover:not(:disabled) {
+  background: var(--btn-hover);
+  border-color: var(--line-3);
+  color: var(--text);
+}
+
+:where(.button):active:not(:disabled) {
+  transform: translateY(0.5px);
+}
+
+:where(.button):disabled {
+  opacity: 0.36;
+  cursor: not-allowed;
+}
+
+:where(.primary) {
+  background: var(--primary-bg);
+  border-color: var(--primary-bg);
+  color: var(--primary-fg);
+}
+
+:where(.primary):hover:not(:disabled) {
+  background: var(--primary-hover);
+  border-color: var(--primary-hover);
+  color: var(--primary-fg);
+}
+
+:where(.primary)[aria-busy='true']:disabled {
+  opacity: 1;
+  cursor: progress;
+  background: var(--primary-hover);
+  border-color: var(--primary-hover);
+}
+
+:where(.icon) {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted);
+  flex: none;
+}
+
+:where(.icon):hover:not(:disabled) {
+  background: var(--btn-hover);
+  color: var(--text);
+}
+
+:where(.block) {
+  width: 100%;
+  height: 30px;
+}
+
+:where(.big) {
+  height: 38px;
+  padding: 0 24px;
+  font-size: 13px;
+}

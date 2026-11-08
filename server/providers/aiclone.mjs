@@ -72,6 +72,22 @@ function errorText(json, text) {
 }
 
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, Math.max(0, ms)));
+const RETRYABLE = /HTTP (5\d\d|429)|fetch failed|network|timeout|aborted|ECONNRESET|ETIMEDOUT|ENOTFOUND|EAI_AGAIN/i;
+
+// 仅用于幂等的轮询 GET；创建任务的 POST 不重试，避免重复扣积分
+async function withRetry(fn, attempts = 2) {
+  let last;
+  for (let i = 0; i < attempts; i += 1) {
+    try {
+      return await fn();
+    } catch (error) {
+      last = error;
+      if (i === attempts - 1 || !RETRYABLE.test(String(error?.message || error))) throw error;
+      await delay(500 * (i + 1));
+    }
+  }
+  throw last;
+}
 
 export function createAicloneProvider(config, initialModel) {
   let model = AICLONE_MODELS.some((item) => item.id === initialModel)
@@ -149,7 +165,9 @@ export function createAicloneProvider(config, initialModel) {
       await delay(Math.min(config.aiclone.pollMs, deadline - Date.now()));
       if (Date.now() >= deadline) break;
 
-      const payload = await request(`/api/v2/tasks/${encodeURIComponent(taskId)}`, { method: 'GET' });
+      const payload = await withRetry(() =>
+        request(`/api/v2/tasks/${encodeURIComponent(taskId)}`, { method: 'GET' }),
+      );
       const state = readState(payload);
       lastStatus = state.status;
       if (state.url) return resolveImage(state.url, ratio);
