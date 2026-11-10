@@ -5,17 +5,13 @@ import { Modal } from '../common/Modal';
 import { Button } from '../common/Button';
 import { Segmented } from '../common/Segmented';
 import { Textarea } from '../ui/textarea';
+import { parseIntInRange } from '../../utils/number';
+import { pad } from '../../utils/format';
 
 type Mode = 'single' | 'import';
 
 const CHUNK_MIN = 20;
 const CHUNK_MAX = 500;
-
-function parseChunk(raw: string): number | null {
-  if (!/^\d+$/.test(raw.trim())) return null;
-  const value = Number(raw);
-  return value >= CHUNK_MIN && value <= CHUNK_MAX ? value : null;
-}
 
 export function AudioAddDialog() {
   const open = useWorkbench((s) => s.audioAddOpen);
@@ -49,7 +45,7 @@ export function AudioAddDialog() {
 
   if (!open) return null;
 
-  const chunkChars = parseChunk(chunkRaw);
+  const chunkChars = parseIntInRange(chunkRaw, CHUNK_MIN, CHUNK_MAX);
   const chars = chunks?.reduce((sum, item) => sum + item.length, 0) || 0;
 
   const changeText = (value: string) => {
@@ -253,7 +249,7 @@ export function AudioAddDialog() {
               <div className="audio-split-list">
                 {chunks.map((chunk, index) => (
                   <div key={index} className="audio-split-item">
-                    <span className="audio-split-no">{String(index + 1).padStart(2, '0')}</span>
+                    <span className="audio-split-no">{pad(index + 1)}</span>
                     <span className="audio-split-text">{chunk}</span>
                     <span className="audio-split-len">{chunk.length}</span>
                   </div>

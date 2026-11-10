@@ -1,4 +1,5 @@
 import { sniffExt } from '../assets.mjs';
+import { delay, isRetryable } from '../utils/retry.mjs';
 
 export function mimeFor(data) {
   const ext = sniffExt(data);
@@ -12,9 +13,6 @@ export function decodeBase64(value) {
   const raw = String(value).includes(',') ? String(value).split(',').pop() : String(value);
   return Buffer.from(raw, 'base64');
 }
-
-const delay = (ms) => new Promise((resolve) => setTimeout(resolve, Math.max(0, ms)));
-const RETRYABLE = /HTTP (5\d\d|429)|fetch failed|network|timeout|aborted|ECONNRESET|ETIMEDOUT|ENOTFOUND|EAI_AGAIN/i;
 
 export async function downloadImage(url, timeoutMs, signal) {
   const absolute = url.startsWith('data:') ? url : new URL(url).toString();
@@ -38,7 +36,7 @@ export async function downloadImage(url, timeoutMs, signal) {
       return { data, mime: res.headers.get('content-type') || mimeFor(data) };
     } catch (error) {
       last = error;
-      const retryable = RETRYABLE.test(String(error?.message || error)) || error?.status >= 500 || error?.status === 429;
+      const retryable = isRetryable(error) || error?.status >= 500 || error?.status === 429;
       if (attempt === 2 || !retryable || signal?.aborted) throw error;
       await delay(500 * (attempt + 1));
     }

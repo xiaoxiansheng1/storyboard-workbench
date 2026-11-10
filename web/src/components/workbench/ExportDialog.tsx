@@ -13,6 +13,8 @@ import type {
 import { Modal } from '../common/Modal';
 import { Button } from '../common/Button';
 import { Segmented } from '../common/Segmented';
+import { readStoredJson, writeStoredJson } from '../../utils/storage';
+import { clock, formatDateTime, formatSize, pad } from '../../utils/format';
 
 interface ResolutionOption {
   id: '720p' | '1080p' | '4k';
@@ -76,71 +78,35 @@ const DEFAULT_PREFS: RenderPrefs = {
 };
 
 function readPrefs(): RenderPrefs {
-  try {
-    const raw = window.localStorage.getItem(RENDER_KEY);
-    if (!raw) return DEFAULT_PREFS;
-    const value = JSON.parse(raw) as Partial<RenderPrefs>;
-    return {
-      resolution: RESOLUTIONS.some((item) => item.id === value.resolution)
-        ? (value.resolution as RenderPrefs['resolution'])
-        : DEFAULT_PREFS.resolution,
-      fps: FPS_OPTIONS.includes(value.fps as (typeof FPS_OPTIONS)[number])
-        ? (value.fps as number)
-        : DEFAULT_PREFS.fps,
-      fit: value.fit === 'cover' ? 'cover' : 'contain',
-      quality: value.quality === 'high' ? 'high' : 'standard',
-      motion: value.motion === 'in' || value.motion === 'out' ? value.motion : 'none',
-      transition:
-        value.transition === 'none' || value.transition === 'fade' ? value.transition : 'crossfade',
-      transitionSec: TRANSITION_SECONDS.includes(
-        value.transitionSec as (typeof TRANSITION_SECONDS)[number],
-      )
-        ? (value.transitionSec as number)
-        : DEFAULT_PREFS.transitionSec,
-    };
-  } catch {
-    return DEFAULT_PREFS;
-  }
+  const value = readStoredJson<Partial<RenderPrefs>>('local', RENDER_KEY);
+  if (!value) return DEFAULT_PREFS;
+  return {
+    resolution: RESOLUTIONS.some((item) => item.id === value.resolution)
+      ? (value.resolution as RenderPrefs['resolution'])
+      : DEFAULT_PREFS.resolution,
+    fps: FPS_OPTIONS.includes(value.fps as (typeof FPS_OPTIONS)[number])
+      ? (value.fps as number)
+      : DEFAULT_PREFS.fps,
+    fit: value.fit === 'cover' ? 'cover' : 'contain',
+    quality: value.quality === 'high' ? 'high' : 'standard',
+    motion: value.motion === 'in' || value.motion === 'out' ? value.motion : 'none',
+    transition:
+      value.transition === 'none' || value.transition === 'fade' ? value.transition : 'crossfade',
+    transitionSec: TRANSITION_SECONDS.includes(
+      value.transitionSec as (typeof TRANSITION_SECONDS)[number],
+    )
+      ? (value.transitionSec as number)
+      : DEFAULT_PREFS.transitionSec,
+  };
 }
 
 function savePrefs(prefs: RenderPrefs) {
-  try {
-    window.localStorage.setItem(RENDER_KEY, JSON.stringify(prefs));
-  } catch {
-    // 忽略持久化失败
-  }
+  writeStoredJson('local', RENDER_KEY, prefs);
 }
 
 function selectedCandidate(node: Node<ShotData>) {
   const run = node.data.run;
   return run.candidates.find((item) => item.id === run.selectedId) || run.candidates[run.candidates.length - 1];
-}
-
-function formatClock(seconds: number): string {
-  const total = Math.max(0, Math.round(seconds));
-  const h = Math.floor(total / 3600);
-  const m = Math.floor((total % 3600) / 60);
-  const s = total % 60;
-  const mm = h > 0 ? String(m).padStart(2, '0') : String(m);
-  return `${h > 0 ? `${h}:` : ''}${mm}:${String(s).padStart(2, '0')}`;
-}
-
-function formatSize(bytes: number | null): string {
-  if (!bytes) return '—';
-  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
-  const mb = bytes / (1024 * 1024);
-  return mb >= 1024 ? `${(mb / 1024).toFixed(2)} GB` : `${mb.toFixed(1)} MB`;
-}
-
-function formatTime(iso: string): string {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return '';
-  const p = (n: number) => String(n).padStart(2, '0');
-  return `${p(date.getMonth() + 1)}-${p(date.getDate())} ${p(date.getHours())}:${p(date.getMinutes())}`;
-}
-
-function shotLabel(no: number): string {
-  return String(no).padStart(2, '0');
 }
 
 function resLabel(width: number, height: number): string {
@@ -177,13 +143,13 @@ function jobSummary(job: ExportJob): string {
 }
 
 function progressHint(job: ExportJob): string {
-  const total = `总长 ${formatClock(job.durationSec)}`;
+  const total = `总长 ${clock(job.durationSec)}`;
   if (job.status !== 'running' || job.progress < 3) return total;
   const elapsed = (Date.now() - Date.parse(job.createdAt)) / 1000;
   if (!Number.isFinite(elapsed) || elapsed <= 0) return total;
   const remain = (elapsed / job.progress) * (100 - job.progress);
   if (!Number.isFinite(remain) || remain < 5) return total;
-  return `剩余约 ${formatClock(remain)}`;
+  return `剩余约 ${clock(remain)}`;
 }
 
 function previewSrc(job: ExportJob, retry: number): string {
@@ -197,7 +163,7 @@ function historySummary(job: ExportJob): string {
   const parts = [resLabel(job.options.width, job.options.height)];
   if (motion !== 'none') parts.push(MOTION_LABEL[motion]);
   if (transition !== 'none') parts.push(TRANSITION_LABEL[transition]);
-  parts.push(`${job.shots} 镜`, formatClock(job.durationSec), formatSize(job.size));
+  parts.push(`${job.shots} 镜`, clock(job.durationSec), formatSize(job.size));
   return parts.join(' · ');
 }
 
@@ -317,7 +283,7 @@ export function ExportDialog() {
           </div>
           <div className="export-stat">
             <span>总时长</span>
-            <b>{formatClock(summary.duration)}</b>
+            <b>{clock(summary.duration)}</b>
           </div>
           <div className="export-stat">
             <span>分辨率</span>
@@ -399,7 +365,7 @@ export function ExportDialog() {
             </div>
             <div className="export-result-foot">
               <span>
-                {job.shots} 个镜头 · {formatClock(job.durationSec)} · {formatSize(job.size)} ·{' '}
+                {job.shots} 个镜头 · {clock(job.durationSec)} · {formatSize(job.size)} ·{' '}
                 {FIT_LABEL[job.options.fit || 'contain']}
               </span>
               <a className="export-download" href={job.url!} download={job.filename || undefined}>
@@ -415,7 +381,7 @@ export function ExportDialog() {
             <div className="export-warn-title">还有 {missing.length} 个镜头没有首帧</div>
             <div className="export-warn-list">
               {missing.slice(0, 12).map((no) => (
-                <span key={no}>镜头 {shotLabel(no)}</span>
+                <span key={no}>镜头 {pad(no)}</span>
               ))}
               {missing.length > 12 && <span>等 {missing.length} 个</span>}
             </div>
@@ -546,7 +512,7 @@ export function ExportDialog() {
                 className={`export-history-row ${job?.id === item.id ? 'on' : ''}`}
                 onClick={() => viewExport(item)}
               >
-                <span className="export-history-time">{formatTime(item.createdAt)}</span>
+                <span className="export-history-time">{formatDateTime(item.createdAt)}</span>
                 <span className="export-history-meta">{historySummary(item)}</span>
                 <span className={`export-history-status ${item.status}`}>{statusLabel(item)}</span>
               </Button>

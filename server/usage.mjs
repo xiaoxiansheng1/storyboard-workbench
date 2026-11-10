@@ -1,10 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-
-function todayKey(date = new Date()) {
-  const p = (n) => String(n).padStart(2, '0');
-  return `${date.getFullYear()}-${p(date.getMonth() + 1)}-${p(date.getDate())}`;
-}
+import { dayKey } from './utils/time.mjs';
 
 // 所有项目共享同一份每日计数，避免每个项目各自拥有完整额度
 export class Usage {
@@ -25,11 +21,11 @@ export class Usage {
     } catch {
       // 文件不存在或损坏时从零开始
     }
-    return { date: todayKey(), count: 0 };
+    return { date: dayKey(), count: 0 };
   }
 
   #roll() {
-    const today = todayKey();
+    const today = dayKey();
     if (this.data.date !== today) {
       this.data = { date: today, count: 0 };
       this.save();
@@ -48,7 +44,7 @@ export class Usage {
   }
 
   reset() {
-    this.data = { date: todayKey(), count: 0 };
+    this.data = { date: dayKey(), count: 0 };
     this.save();
     return 0;
   }

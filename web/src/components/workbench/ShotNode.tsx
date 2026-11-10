@@ -1,10 +1,7 @@
 import { Handle, Position, type Node, type NodeProps } from '@xyflow/react';
 import type { ShotData } from '../../types';
 import { Film, Image as ImageIcon } from 'lucide-react';
-
-function shortTime(timecode: string): string {
-  return String(timecode || '').replace(/^00:/, '').replace(',', '.');
-}
+import { pad, shortTimecode } from '../../utils/format';
 
 export function ShotNode({ data, selected }: NodeProps<Node<ShotData>>) {
   const run = data.run;
@@ -50,7 +47,7 @@ export function ShotNode({ data, selected }: NodeProps<Node<ShotData>>) {
 
       <div className="node-card">
         <header className="node-head">
-          <span className="shot-no">镜头 {String(data.no).padStart(2, '0')}</span>
+          <span className="shot-no">镜头 {pad(data.no)}</span>
           <span
             className={`anchor-tag ${data.anchor === 'B' ? 'b' : 'a'}`}
             title={data.anchor === 'B' ? '空镜锚点' : '人物锚点'}
@@ -58,7 +55,7 @@ export function ShotNode({ data, selected }: NodeProps<Node<ShotData>>) {
             {data.anchor}
           </span>
           <span className="node-head-meta">
-            <span className="node-time">{shortTime(data.srtStart)}</span>
+            <span className="node-time">{shortTimecode(data.srtStart)}</span>
             <span className="node-dur">{data.duration.toFixed(2)}s</span>
           </span>
         </header>

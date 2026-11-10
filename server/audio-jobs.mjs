@@ -1,6 +1,8 @@
 import { pruneAssets, saveAsset } from './assets.mjs';
 import { audioPeaks, probeAudio } from './video.mjs';
 import { emptyAudioRun } from './audio.mjs';
+import { roundTo } from './utils/num.mjs';
+import { messageOf } from './utils/message.mjs';
 
 export function createAudioJobs({
   store,
@@ -105,7 +107,7 @@ export function createAudioJobs({
             return;
           }
           node.data.run.status = 'error';
-          node.data.run.error = error?.message || String(error);
+          node.data.run.error = messageOf(error);
           node.data.run.progress = null;
           node.data.run.updatedAt = new Date().toISOString();
           store.save();
@@ -160,7 +162,7 @@ export function createAudioJobs({
     let durationSec = 0;
     try {
       const meta = await probeAudio(config.ffprobePath, filePath);
-      durationSec = Math.round(meta.durationSec * 1000) / 1000;
+      durationSec = roundTo(meta.durationSec, 3);
     } catch (error) {
       throw new Error(`生成的音频无法读取：${error.message}`);
     }

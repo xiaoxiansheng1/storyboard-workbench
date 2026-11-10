@@ -8,23 +8,10 @@ import type { ProjectSummary } from '../types';
 import { Button } from '../components/common/Button';
 import { Modal } from '../components/common/Modal';
 import styles from './ProjectsPage.module.css';
+import { errorMessage } from '../utils/error';
+import { relativeTime } from '../utils/format';
 
 type DialogState = { mode: 'create' } | { mode: 'rename'; project: ProjectSummary } | null;
-
-function formatTime(iso: string) {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return '';
-  const diff = Date.now() - date.getTime();
-  const minute = 60_000;
-  const hour = 60 * minute;
-  const day = 24 * hour;
-  if (diff < minute) return '刚刚';
-  if (diff < hour) return `${Math.floor(diff / minute)} 分钟前`;
-  if (diff < day) return `${Math.floor(diff / hour)} 小时前`;
-  if (diff < 2 * day) return '昨天';
-  if (diff < 7 * day) return `${Math.floor(diff / day)} 天前`;
-  return new Intl.DateTimeFormat('zh-CN', { month: 'numeric', day: 'numeric' }).format(date);
-}
 
 export function ProjectsPage() {
   const navigate = useNavigate();
@@ -42,7 +29,7 @@ export function ProjectsPage() {
       setItems(res.projects);
     } catch (error) {
       setItems([]);
-      toast.error(`读取项目失败：${(error as Error).message}`);
+      toast.error(`读取项目失败：${errorMessage(error)}`);
     }
   }, []);
 
@@ -90,7 +77,7 @@ export function ProjectsPage() {
         navigate(`/p/${res.project.id}`);
       }
     } catch (error) {
-      toast.error(`操作失败：${(error as Error).message}`);
+      toast.error(`操作失败：${errorMessage(error)}`);
     } finally {
       setBusy(false);
     }
@@ -105,7 +92,7 @@ export function ProjectsPage() {
       setDeleting(null);
       toast.success('项目已移入回收目录');
     } catch (error) {
-      toast.error(`删除失败：${(error as Error).message}`);
+      toast.error(`删除失败：${errorMessage(error)}`);
     } finally {
       setBusy(false);
     }
@@ -222,7 +209,7 @@ export function ProjectsPage() {
                   </p>
                 </div>
                 <footer className={styles.cardFoot}>
-                  <span>{formatTime(project.updatedAt)}更新</span>
+                  <span>{relativeTime(project.updatedAt)}更新</span>
                   <span className={styles.openHint}>
                     打开
                     <ArrowUpRight size={12} />

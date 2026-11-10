@@ -10,7 +10,7 @@
     "dev:web": "vite --config web/vite.config.ts",
     "build": "vite build --config web/vite.config.ts",
     "start": "node server/index.mjs",
-    "test": "node --test server/test",
+    "test": "node --test server/test/*.test.mjs",
     "typecheck": "tsc -p web/tsconfig.json --noEmit"
   },
   "dependencies": {
@@ -21,6 +21,7 @@
     "@radix-ui/react-toggle-group": "^1.2.1",
     "@xyflow/react": "^12.3.6",
     "express": "^4.21.2",
+    "ky": "^2.2.0",
     "lucide-react": "^1.70.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",

@@ -1,15 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { clock } from './utils/format';
+import { api } from './api';
 import type { AudioCandidate } from './types';
 
 type AudioRef = { readonly current: HTMLAudioElement | null };
 type ElementRef = { readonly current: HTMLElement | null };
 
 const peakCache = new Map<string, Promise<number[]>>();
-
-export function clock(seconds: number): string {
-  const value = Math.max(0, Number(seconds) || 0);
-  return `${Math.floor(value / 60)}:${String(Math.floor(value % 60)).padStart(2, '0')}`;
-}
 
 export function waveform(seedText: string, count: number): number[] {
   let seed = 0;
@@ -49,11 +46,9 @@ function peaksFor(
 
   const task = (async () => {
     const query = `candidateId=${encodeURIComponent(candidate.id)}`;
-    const res = await fetch(
+    const data = await api<{ peaks?: number[] }>(
       `/api/projects/${encodeURIComponent(projectId)}/audio/nodes/${encodeURIComponent(nodeId)}/peaks?${query}`,
     );
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = (await res.json()) as { peaks?: number[] };
     return Array.isArray(data.peaks) ? data.peaks : [];
   })().catch(() => {
     peakCache.delete(key);

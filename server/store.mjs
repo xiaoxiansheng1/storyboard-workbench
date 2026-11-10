@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { emptyRun } from './hash.mjs';
 import { normalizeAudioData } from './audio.mjs';
+import { readJsonSafe, writeJsonAtomic } from './utils/json-file.mjs';
 
 function blank() {
   return {
@@ -90,11 +91,7 @@ export class Store {
   }
 
   #load() {
-    try {
-      return normalize(JSON.parse(fs.readFileSync(this.file, 'utf8')));
-    } catch {
-      return blank();
-    }
+    return readJsonSafe(this.file, blank(), normalize);
   }
 
   // 高频调用（拖拽、生成进度）合并成一次落盘，避免反复全量重写阻塞事件循环
@@ -113,9 +110,7 @@ export class Store {
     }
     if (this.#disposed || !this.#pending) return;
     this.#pending = false;
-    const tmp = `${this.file}.tmp`;
-    fs.writeFileSync(tmp, JSON.stringify(this.data), 'utf8');
-    fs.renameSync(tmp, this.file);
+    writeJsonAtomic(this.file, this.data, false);
   }
 
   // 项目目录被移走后不能再落盘，否则会在原路径重建目录

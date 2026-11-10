@@ -1,5 +1,6 @@
 import { useRef, type CSSProperties, type KeyboardEvent, type PointerEvent } from 'react';
 import styles from './Slider.module.css';
+import { clamp } from '../../utils/number';
 
 interface SliderProps {
   value: number;
@@ -17,10 +18,6 @@ interface SliderProps {
 function round(value: number, step: number): number {
   const precision = Math.max(0, -Math.floor(Math.log10(step)));
   return Number((Math.round(value / step) * step).toFixed(precision));
-}
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, value));
 }
 
 export function Slider({

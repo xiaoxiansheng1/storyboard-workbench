@@ -4,7 +4,8 @@ import { Handle, Position } from '@xyflow/react';
 import { AudioLines, Pause, Play } from 'lucide-react';
 import { useWorkbench } from '../../store';
 import type { AudioData } from '../../types';
-import { clock, useAudioProgress, useWaveform } from '../../audioWave';
+import { useAudioProgress, useWaveform } from '../../audioWave';
+import { clock, pad } from '../../utils/format';
 
 const BAR_COUNT = 36;
 
@@ -86,7 +87,7 @@ export function AudioNode({ id, data, selected }: NodeProps<Node<AudioData>>) {
       />
       <div className="node-card audio-card">
         <header className="audio-head">
-          <span className="audio-no">音频 {String(data.no).padStart(2, '0')}</span>
+          <span className="audio-no">音频 {pad(data.no)}</span>
           {badge && (
             <span
               className={`audio-badge ${failed ? 'error' : stale || !candidate ? 'warn' : ''}`}

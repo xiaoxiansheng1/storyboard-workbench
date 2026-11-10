@@ -1,0 +1,153 @@
+/* =========================================================
+   灯箱
+   ========================================================= */
+
+.lightbox-modal [data-modal-body] {
+  padding: 12px;
+}
+
+.lightbox-stage {
+  display: grid;
+  place-items: center;
+  background: var(--frame-bg);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.lightbox-stage > img {
+  display: block;
+  max-width: 100%;
+  max-height: calc(100vh - 230px);
+}
+
+.lightbox-caption {
+  margin-top: 10px;
+  padding: 0 2px;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--text-2);
+}
+
+.lightbox-meta {
+  margin-right: auto;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--dim);
+}
+
+.lightbox-modal [data-modal-actions] {
+  padding: 10px 14px;
+}
+
+.lightbox-modal .button-link {
+  height: 28px;
+  font-size: 12px;
+}
+
+.button-link {
+  display: inline-flex;
+  align-items: center;
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--line-2);
+  border-radius: 8px;
+  background: var(--btn-bg);
+  color: var(--text-2);
+  text-decoration: none;
+  font-size: 13px;
+}
+
+.button-link:hover {
+  background: var(--btn-hover);
+  color: var(--text);
+}
+
+/* =========================================================
+   空状态
+   ========================================================= */
+
+.route-loading {
+  height: 100%;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: var(--bg);
+  color: var(--muted);
+  font-size: 12.5px;
+}
+
+.empty-state {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  pointer-events: none;
+}
+
+.empty-card {
+  pointer-events: auto;
+  width: min(560px, 100%);
+  padding: 40px 42px 34px;
+  text-align: center;
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  border: 1px solid var(--line-2);
+  border-radius: 20px;
+  box-shadow: var(--shadow-2);
+  backdrop-filter: blur(24px);
+}
+
+.empty-card h1 {
+  margin: 0 0 12px;
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.empty-lead {
+  margin: 0 auto 24px;
+  max-width: 430px;
+  font-size: 13.5px;
+  line-height: 1.8;
+  color: var(--muted);
+}
+
+.empty-tip {
+  margin: 20px 0 0;
+  font-family: var(--font-ui);
+  font-size: 11px;
+  line-height: 1.9;
+  color: var(--dim);
+}
+
+/* =========================================================
+   Toast（Sonner）
+   ========================================================= */
+
+/* 左上角提示：从左侧滑入，消失时滑回左侧 */
+[data-sonner-toaster][data-x-position='left'] [data-sonner-toast] {
+  --y: translateX(-105%);
+  transition:
+    transform 360ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 260ms,
+    height 400ms,
+    box-shadow 200ms;
+}
+
+[data-sonner-toaster][data-x-position='left'] [data-sonner-toast][data-mounted='true'] {
+  --y: translateX(0);
+}
+
+[data-sonner-toaster][data-x-position='left'] [data-sonner-toast][data-expanded='false'][data-front='false'] {
+  --y: translateY(calc(var(--lift-amount) * var(--toasts-before))) translateX(0)
+    scale(calc(-1 * var(--scale)));
+}
+
+[data-sonner-toaster][data-x-position='left'] [data-sonner-toast][data-mounted='true'][data-expanded='true'] {
+  --y: translateY(calc(var(--lift) * var(--offset))) translateX(0);
+}
+
+[data-sonner-toaster][data-x-position='left'] [data-sonner-toast][data-removed='true'][data-front='true'][data-swipe-out='false'] {
+  --y: translateX(-105%);
+}

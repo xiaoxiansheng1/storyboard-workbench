@@ -20,7 +20,8 @@ import {
   CollapsibleTrigger,
 } from '../ui/collapsible';
 import { Textarea } from '../ui/textarea';
-import { clock, useAudioProgress, useWaveform } from '../../audioWave';
+import { useAudioProgress, useWaveform } from '../../audioWave';
+import { clock, pad } from '../../utils/format';
 
 const BAR_COUNT = 52;
 
@@ -168,7 +169,7 @@ export function AudioInspector({ node }: { node: Node<AudioData> }) {
   };
 
   const remove = () => {
-    if (!window.confirm(`删除音频节点 ${String(data.no).padStart(2, '0')}？生成的音频也会一并删除。`)) {
+    if (!window.confirm(`删除音频节点 ${pad(data.no)}？生成的音频也会一并删除。`)) {
       return;
     }
     audioRef.current?.pause();
@@ -179,7 +180,7 @@ export function AudioInspector({ node }: { node: Node<AudioData> }) {
     <aside className="inspector audio-inspector">
       <header className="inspector-head">
         <div className="inspector-head-main">
-          <span className="inspector-no">{String(data.no).padStart(2, '0')}</span>
+          <span className="inspector-no">{pad(data.no)}</span>
           <span className="anchor-tag audio-tag">
             <Volume2 size={10} />
             音频

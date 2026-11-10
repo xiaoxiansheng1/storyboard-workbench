@@ -6,6 +6,8 @@ import { AudioLines, Image as ImageIcon, RotateCcw, Trash2, Upload, type LucideI
 import { Modal } from '../common/Modal';
 import { Button } from '../common/Button';
 import { Segmented } from '../common/Segmented';
+import { errorMessage } from '../../utils/error';
+import { parseIntInRange } from '../../utils/number';
 
 type LimitKey = 'concurrency' | 'maxBatch';
 
@@ -30,12 +32,6 @@ const INFER_OPTIONS: { value: AudioInferMode; label: string }[] = [
   { value: '普通推理', label: '普通推理' },
   { value: '批次推理', label: '批次推理' },
 ];
-
-function parseIntInRange(raw: string, min: number, max: number): number | null {
-  if (!/^\d+$/.test(raw.trim())) return null;
-  const value = Number(raw);
-  return value >= min && value <= max ? value : null;
-}
 
 export function SettingsDialog() {
   const open = useWorkbench((s) => s.settingsOpen);
@@ -71,7 +67,7 @@ export function SettingsDialog() {
       );
       setHealth(res);
     } catch (error) {
-      setHealth({ ok: false, error: (error as Error).message });
+      setHealth({ ok: false, error: errorMessage(error) });
     } finally {
       setChecking(false);
     }

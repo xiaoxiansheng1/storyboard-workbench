@@ -4,6 +4,9 @@ import crypto from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { probeAudio } from './video.mjs';
 import { orderedAudioNodes } from './audio.mjs';
+import { roundTo, clampNumber } from './utils/num.mjs';
+import { fileTimestamp } from './utils/time.mjs';
+import { messageOf } from './utils/message.mjs';
 
 const HISTORY_LIMIT = 20;
 const SILENCE_NOISE = '-45dB';
@@ -18,25 +21,10 @@ const PAUSE_PRESETS = {
   tight: { threshold: 0.4, target: 0.2 },
 };
 
-function round1(value) {
-  return Math.round(value * 10) / 10;
-}
-
-function clampNumber(value, min, max, fallback) {
-  const number = Number(value);
-  if (!Number.isFinite(number)) return fallback;
-  return Math.min(max, Math.max(min, number));
-}
-
-function timestamp(date) {
-  const p = (n) => String(n).padStart(2, '0');
-  return `${date.getFullYear()}${p(date.getMonth() + 1)}${p(date.getDate())}-${p(date.getHours())}${p(date.getMinutes())}${p(date.getSeconds())}`;
-}
-
 function normalizeOptions(raw = {}) {
   const format = raw.format === 'wav' ? 'wav' : 'mp3';
-  const gapSec = round1(clampNumber(raw.gapSec, 0, 2, 0));
-  const gainDb = round1(clampNumber(raw.gainDb, -12, 12, 0));
+  const gapSec = roundTo(clampNumber(raw.gapSec, 0, 2, 0), 1);
+  const gainDb = roundTo(clampNumber(raw.gainDb, -12, 12, 0), 1);
   const enhance = ['off', 'level', 'voice'].includes(raw.enhance) ? raw.enhance : 'off';
   const bitrate = [128, 192, 320].includes(Number(raw.bitrate)) ? Number(raw.bitrate) : 192;
   const bits = Number(raw.bits) === 24 ? 24 : 16;
@@ -49,10 +37,10 @@ function normalizeOptions(raw = {}) {
   let pauseTargetSec = 0;
   if (pauseMode !== 'off') {
     if (pauseMode === 'custom') {
-      pauseThresholdSec = round1(clampNumber(raw.pauseThresholdSec, 0.3, 2, 0.6));
-      pauseTargetSec = round1(clampNumber(raw.pauseTargetSec, 0.1, 1, 0.3));
+      pauseThresholdSec = roundTo(clampNumber(raw.pauseThresholdSec, 0.3, 2, 0.6), 1);
+      pauseTargetSec = roundTo(clampNumber(raw.pauseTargetSec, 0.1, 1, 0.3), 1);
       if (pauseTargetSec > pauseThresholdSec - 0.1) {
-        pauseTargetSec = round1(Math.max(0.1, pauseThresholdSec - 0.1));
+        pauseTargetSec = roundTo(Math.max(0.1, pauseThresholdSec - 0.1), 1);
       }
     } else {
       pauseThresholdSec = PAUSE_PRESETS[pauseMode].threshold;
@@ -360,7 +348,7 @@ export function createAudioExports({
       outputDuration =
         clips.reduce((sum, clip) => sum + clip.processedDuration, 0) +
         gap * Math.max(0, clips.length - 1);
-      job.durationSec = Math.round(outputDuration * 1000) / 1000;
+      job.durationSec = roundTo(outputDuration, 3);
       emit(job);
 
       const args = ['-y', '-hide_banner', '-loglevel', 'error'];
@@ -427,7 +415,7 @@ export function createAudioExports({
       parts.push(`[cat]${chain.join(',')}[out]`);
 
       const ext = options.format === 'wav' ? 'wav' : 'mp3';
-      const filename = `audio-${timestamp(new Date(job.createdAt))}-${job.id.slice(-4)}.${ext}`;
+      const filename = `audio-${fileTimestamp(new Date(job.createdAt))}-${job.id.slice(-4)}.${ext}`;
       const output = path.join(exportDir, filename);
 
       args.push(
@@ -481,7 +469,7 @@ export function createAudioExports({
       job.url = `/exports/${projectId}/${filename}`;
       job.filename = filename;
       job.size = fs.statSync(output).size;
-      job.durationSec = Math.round(actualDuration * 1000) / 1000;
+      job.durationSec = roundTo(actualDuration, 3);
       job.finishedAt = new Date().toISOString();
       finish(run, job);
     } catch (error) {
@@ -495,7 +483,7 @@ export function createAudioExports({
       } else {
         job.status = 'error';
         job.stage = '合成失败';
-        job.error = error?.message || String(error);
+        job.error = messageOf(error);
       }
       finish(run, job);
       if (!run.canceled) console.error(`[audio-export] ${job.id} 失败:`, job.error);

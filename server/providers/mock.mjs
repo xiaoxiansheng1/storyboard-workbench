@@ -1,3 +1,5 @@
+import { pad2 } from '../utils/num.mjs';
+
 function escapeXml(value) {
   return String(value).replace(/[&<>"']/g, (c) => ({
     '&': '&amp;',
@@ -35,7 +37,7 @@ export function createMockProvider() {
       const width = Number.isFinite(w) ? w : 1280;
       const height = Number.isFinite(h) ? h : 720;
       const accent = meta.anchor === 'B' ? '#9ec4d2' : '#ddc09a';
-      const no = String(meta.no ?? '').padStart(2, '0');
+      const no = pad2(meta.no);
       const unit = width / 1280;
       const pad = Math.round(width * 0.055);
       const captionLines = wrap(meta.caption || '', Math.floor(width / 30)).slice(0, 2);

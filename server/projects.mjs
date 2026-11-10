@@ -1,39 +1,22 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import crypto from 'node:crypto';
 import { Store } from './store.mjs';
 import { createJobs } from './jobs.mjs';
 import { createExports } from './exports.mjs';
 import { createAudioJobs } from './audio-jobs.mjs';
 import { createAudioExports } from './audio-exports.mjs';
 import { ensureAudioLinks } from './audio.mjs';
+import { newId } from './utils/id.mjs';
+import { readJsonSafe, writeJsonAtomic } from './utils/json-file.mjs';
 
 export const ID_PATTERN = /^p-[a-z0-9]{1,32}-[a-f0-9]{6}$/;
 const NAME_MAX = 80;
 const DEFAULT_NAME = '未命名项目';
 const MIGRATION_MARKER = '.projects-migrated';
 
-function newId() {
-  return `p-${Date.now().toString(36)}-${crypto.randomBytes(3).toString('hex')}`;
-}
-
 function normalizeName(value) {
   const name = String(value ?? '').trim().slice(0, NAME_MAX);
   return name || DEFAULT_NAME;
-}
-
-function readJson(file, fallback) {
-  try {
-    return JSON.parse(fs.readFileSync(file, 'utf8'));
-  } catch {
-    return fallback;
-  }
-}
-
-function writeJson(file, data) {
-  const tmp = `${file}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(data, null, 2), 'utf8');
-  fs.renameSync(tmp, file);
 }
 
 function namespaceUrl(value, kind, projectId) {
@@ -127,7 +110,7 @@ export class ProjectManager {
     if (!fs.existsSync(legacyProject)) return;
     if (fs.existsSync(path.join(this.dataDir, MIGRATION_MARKER))) return;
 
-    const id = newId();
+    const id = newId('p');
     const dir = path.join(this.projectsDir, id);
     fs.mkdirSync(dir, { recursive: true });
     fs.mkdirSync(this.backupDir, { recursive: true });
@@ -141,13 +124,13 @@ export class ProjectManager {
     moveInto(path.join(this.dataDir, 'exports.json'), path.join(dir, 'exports.json'));
 
     const projectFile = path.join(dir, 'project.json');
-    const project = readJson(projectFile, null);
-    if (project) writeJson(projectFile, namespaceProjectUrls(project, id));
+    const project = readJsonSafe(projectFile, null);
+    if (project) writeJsonAtomic(projectFile, namespaceProjectUrls(project, id));
 
     const historyFile = path.join(dir, 'exports.json');
-    const history = readJson(historyFile, null);
+    const history = readJsonSafe(historyFile, null);
     if (Array.isArray(history)) {
-      writeJson(
+      writeJsonAtomic(
         historyFile,
         history.map((job) => ({ ...job, url: namespaceUrl(job.url, 'exports', id) })),
       );
@@ -167,7 +150,7 @@ export class ProjectManager {
       const dir = path.join(this.projectsDir, name);
       const file = path.join(dir, 'project.json');
       if (!fs.existsSync(file)) continue;
-      const project = readJson(file, null);
+      const project = readJsonSafe(file, null);
       if (!project) continue;
       const runtime = this.runtimes.get(name);
       items.push(summarize(name, dir, runtime ? runtime.store.data : project));
@@ -182,7 +165,7 @@ export class ProjectManager {
     const file = path.join(dir, 'project.json');
     if (!fs.existsSync(file)) return null;
     const runtime = this.runtimes.get(id);
-    const project = runtime ? runtime.store.data : readJson(file, null);
+    const project = runtime ? runtime.store.data : readJsonSafe(file, null);
     if (!project) return null;
     return summarize(id, dir, project);
   }
@@ -247,7 +230,7 @@ export class ProjectManager {
   }
 
   create(name) {
-    const id = newId();
+    const id = newId('p');
     const dir = path.join(this.projectsDir, id);
     fs.mkdirSync(path.join(dir, 'assets'), { recursive: true });
     const now = new Date().toISOString();
@@ -263,7 +246,7 @@ export class ProjectManager {
       nodes: [],
       edges: [],
     };
-    writeJson(path.join(dir, 'project.json'), project);
+    writeJsonAtomic(path.join(dir, 'project.json'), project);
     return this.summary(id);
   }
 
@@ -277,10 +260,10 @@ export class ProjectManager {
       runtime.store.flush();
     } else {
       const file = path.join(dir, 'project.json');
-      const project = readJson(file, null);
+      const project = readJsonSafe(file, null);
       if (!project) return null;
       project.meta = { ...(project.meta || {}), name: normalizeName(name) };
-      writeJson(file, project);
+      writeJsonAtomic(file, project);
     }
     return this.summary(id);
   }

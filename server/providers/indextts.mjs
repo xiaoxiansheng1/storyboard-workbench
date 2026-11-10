@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { extFromMime, sniffExt } from '../assets.mjs';
 import { timeoutSignal } from './signal.mjs';
+import { errorText } from '../utils/message.mjs';
 
 const DEFAULTS = {
   inferMode: '普通推理',
@@ -26,13 +27,6 @@ const AUDIO_MIME = {
   aac: 'audio/aac',
   weba: 'audio/webm',
 };
-
-function errorText(json, text) {
-  if (typeof json?.error === 'string') return json.error;
-  if (json?.error?.message) return json.error.message;
-  if (typeof json?.detail === 'string') return json.detail;
-  return String(text || '').slice(0, 300);
-}
 
 export function createIndexTTSProvider(config) {
   const uploads = new Map();

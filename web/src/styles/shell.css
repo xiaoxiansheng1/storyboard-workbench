@@ -1,0 +1,315 @@
+/* =========================================================
+   画布
+   ========================================================= */
+
+.canvas-wrap {
+  position: fixed;
+  inset: 48px 0 0 0;
+}
+
+.react-flow {
+  background-color: var(--bg);
+  background-image: radial-gradient(80% 55% at 50% -12%, var(--canvas-glow) 0%, transparent 72%);
+}
+
+.canvas-wrap.pending .react-flow {
+  visibility: hidden;
+}
+
+.canvas-wrap.arrived .shot-node {
+  animation: node-enter 0.36s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes node-enter {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.react-flow__attribution {
+  background: transparent !important;
+  color: var(--dim);
+  font-size: 9px;
+}
+
+.react-flow__attribution a {
+  color: var(--dim);
+}
+
+.react-flow__edge.shot-edge .react-flow__edge-path,
+.react-flow__edge.audio-edge .react-flow__edge-path {
+  animation: edge-flow 1.6s linear infinite;
+}
+
+.react-flow__edge.audio-edge .react-flow__edge-path {
+  stroke-linecap: round;
+  cursor: pointer;
+}
+
+.react-flow__edge.audio-edge:hover .react-flow__edge-path,
+.react-flow__edge.audio-edge.selected .react-flow__edge-path {
+  stroke: var(--audio);
+}
+
+.audio-node .react-flow__handle.port:hover {
+  border-color: var(--audio);
+  color: var(--audio);
+  background: var(--audio-soft);
+}
+
+.audio-node .react-flow__handle.port.is-locked {
+  opacity: 0.28;
+  pointer-events: none;
+}
+
+@keyframes edge-flow {
+  to {
+    stroke-dashoffset: -10;
+  }
+}
+
+.react-flow__controls {
+  box-shadow: var(--shadow-1);
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+}
+
+.react-flow__controls-button {
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  background: var(--surface);
+  color: var(--text-2);
+  fill: currentColor;
+}
+
+.react-flow__controls-button:hover {
+  background: var(--surface-3);
+  color: var(--text);
+  fill: currentColor;
+}
+
+.react-flow__controls-button svg.lucide {
+  width: 14px;
+  height: 14px;
+  max-width: none;
+  max-height: none;
+  fill: none;
+}
+
+.react-flow__minimap {
+  background: var(--surface) !important;
+  border: 1px solid var(--line);
+  border-radius: 10px !important;
+  overflow: hidden;
+  box-shadow: var(--shadow-1);
+}
+
+.react-flow__handle.port {
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--surface-2);
+  border: 1px solid var(--line-2);
+  color: var(--muted);
+  transition: background 0.14s ease, border-color 0.14s ease, color 0.14s ease;
+}
+
+.react-flow__handle.port::after {
+  content: '+';
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1;
+  color: inherit;
+  pointer-events: none;
+}
+
+.react-flow__handle.port:hover {
+  background: var(--surface-3);
+  border-color: var(--line-3);
+  color: var(--text);
+}
+
+.react-flow__handle-left.port {
+  left: -10px;
+}
+
+.react-flow__handle-right.port {
+  right: -10px;
+}
+
+/* =========================================================
+   顶栏
+   ========================================================= */
+
+.toolbar {
+  position: fixed;
+  inset: 0 0 auto 0;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 12px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line-2);
+  z-index: 40;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 4px 8px 4px 4px;
+  margin-left: -8px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.16s ease;
+}
+
+.brand:hover {
+  background: var(--btn-hover);
+}
+
+.brand:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 60%, transparent);
+  outline-offset: -2px;
+}
+
+.brand-mark {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--line-2);
+  border-radius: 7px;
+  background: var(--surface-2);
+  color: var(--text-2);
+  line-height: 1;
+  flex: none;
+}
+
+.brand-title {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.brand-project {
+  max-width: 220px;
+  padding-left: 10px;
+  margin-left: 2px;
+  overflow: hidden;
+  border-left: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 760px) {
+  .brand-project {
+    display: none;
+  }
+}
+
+.stats {
+  display: flex;
+  align-items: stretch;
+  gap: 16px;
+  padding-left: 16px;
+  border-left: 1px solid var(--line);
+  white-space: nowrap;
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  line-height: 1.05;
+}
+
+.stat b {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: 0.01em;
+}
+
+.stat span {
+  font-family: var(--font-ui);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.toolbar-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.toolbar-actions > .toolbar-action {
+  height: 30px;
+}
+
+.toolbar-menu {
+  min-width: 132px;
+  padding: 4px;
+  border: 1px solid var(--line-2);
+  border-radius: 10px;
+  background: var(--surface-2);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.34);
+  z-index: 60;
+}
+
+.toolbar-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 9px;
+  border-radius: 7px;
+  font-size: 12.5px;
+  color: var(--text);
+  cursor: pointer;
+  outline: none;
+  user-select: none;
+}
+
+.toolbar-menu-item:hover,
+.toolbar-menu-item[data-highlighted] {
+  background: var(--btn-hover);
+}
+
+.theme-toggle {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 7px;
+  color: var(--muted);
+  flex: none;
+}
+
+.theme-toggle:hover:not(:disabled) {
+  color: var(--text);
+}

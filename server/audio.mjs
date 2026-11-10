@@ -1,4 +1,6 @@
-import crypto from 'node:crypto';
+import { newId } from './utils/id.mjs';
+import { sha1Short } from './utils/digest.mjs';
+import { roundTo } from './utils/num.mjs';
 
 const CHUNK_MIN = 20;
 const CHUNK_MAX = 500;
@@ -6,7 +8,7 @@ const CHUNK_DEFAULT = 80;
 const SENTENCE_END = /[。！？!?；;…]/;
 
 export function hashAudio(text) {
-  return crypto.createHash('sha1').update(String(text || '')).digest('hex').slice(0, 12);
+  return sha1Short(text || '');
 }
 
 export function emptyAudioRun() {
@@ -23,7 +25,7 @@ export function emptyAudioRun() {
 }
 
 export function audioNodeId() {
-  return `audio-${Date.now().toString(36)}-${crypto.randomBytes(3).toString('hex')}`;
+  return newId('audio');
 }
 
 export function normalizeAudioData(data = {}) {
@@ -254,5 +256,5 @@ export function splitAudioText(raw, chunkChars = CHUNK_DEFAULT) {
 }
 
 export function mediaSeconds(value) {
-  return Math.round(Math.max(0, Number(value) || 0) * 1000) / 1000;
+  return roundTo(Math.max(0, Number(value) || 0), 3);
 }

@@ -3,6 +3,7 @@ import { Crosshair, ListTodo, RotateCcw, X } from 'lucide-react';
 import { useWorkbench } from '../../store';
 import type { AudioData, ShotData } from '../../types';
 import { Button } from '../common/Button';
+import { pad } from '../../utils/format';
 
 type TaskKind = 'shot' | 'audio';
 type TaskTab = 'active' | 'failed';
@@ -25,7 +26,6 @@ interface ActiveExport {
   cancel: () => void;
 }
 
-const pad = (no: number) => String(no).padStart(2, '0');
 const isActive = (status: string) => status === 'queued' || status === 'running';
 
 function percent(task: Task) {

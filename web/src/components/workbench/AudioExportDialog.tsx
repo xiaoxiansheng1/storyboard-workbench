@@ -13,6 +13,9 @@ import { Modal } from '../common/Modal';
 import { Button } from '../common/Button';
 import { Segmented } from '../common/Segmented';
 import { Slider } from '../common/Slider';
+import { readStoredJson, writeStoredJson } from '../../utils/storage';
+import { clock, formatDateTime, formatSize, pad } from '../../utils/format';
+import { clampOr, roundTo } from '../../utils/number';
 
 type PauseMode = AudioPauseMode;
 
@@ -85,65 +88,29 @@ const DEFAULTS: Settings = {
   pauseTargetSec: 0.3,
 };
 
-function round1(value: number): number {
-  return Math.round(value * 10) / 10;
-}
-
-function clamp(value: number, min: number, max: number, fallback: number): number {
-  const number = Number(value);
-  if (!Number.isFinite(number)) return fallback;
-  return Math.min(max, Math.max(min, number));
-}
-
 function loadSettings(): Settings {
-  try {
-    const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
-    if (!raw || typeof raw !== 'object') return DEFAULTS;
-    const pauseMode: PauseMode = ['off', 'light', 'standard', 'tight', 'custom'].includes(
-      raw.pauseMode,
-    )
-      ? raw.pauseMode
-      : DEFAULTS.pauseMode;
-    const enhance: AudioEnhance = ['off', 'level', 'voice'].includes(raw.enhance)
-      ? raw.enhance
-      : DEFAULTS.enhance;
-    return {
-      format: raw.format === 'wav' ? 'wav' : 'mp3',
-      gapSec: round1(clamp(raw.gapSec, 0, 2, 0)),
-      gainDb: round1(clamp(raw.gainDb, -12, 12, 0)),
-      enhance,
-      bitrate: [128, 192, 320].includes(Number(raw.bitrate)) ? Number(raw.bitrate) : 192,
-      bits: Number(raw.bits) === 24 ? 24 : 16,
-      channels: Number(raw.channels) === 2 ? 2 : 1,
-      pauseMode,
-      pauseThresholdSec: round1(clamp(raw.pauseThresholdSec, 0.3, 2, 0.6)),
-      pauseTargetSec: round1(clamp(raw.pauseTargetSec, 0.1, 1, 0.3)),
-    };
-  } catch {
-    return DEFAULTS;
-  }
-}
-
-function clock(seconds: number): string {
-  const total = Math.max(0, Math.round(seconds));
-  const h = Math.floor(total / 3600);
-  const m = Math.floor((total % 3600) / 60);
-  const s = total % 60;
-  return `${h > 0 ? `${h}:${String(m).padStart(2, '0')}` : m}:${String(s).padStart(2, '0')}`;
-}
-
-function formatSize(bytes: number | null): string {
-  if (!bytes) return '—';
-  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
-  const mb = bytes / (1024 * 1024);
-  return mb >= 1024 ? `${(mb / 1024).toFixed(2)} GB` : `${mb.toFixed(1)} MB`;
-}
-
-function formatTime(iso: string): string {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return '';
-  const p = (n: number) => String(n).padStart(2, '0');
-  return `${p(date.getMonth() + 1)}-${p(date.getDate())} ${p(date.getHours())}:${p(date.getMinutes())}`;
+  const raw = readStoredJson<Partial<Settings>>('local', STORAGE_KEY);
+  if (!raw || typeof raw !== 'object') return DEFAULTS;
+  const pauseModes: PauseMode[] = ['off', 'light', 'standard', 'tight', 'custom'];
+  const enhances: AudioEnhance[] = ['off', 'level', 'voice'];
+  const pauseMode = pauseModes.includes(raw.pauseMode as PauseMode)
+    ? (raw.pauseMode as PauseMode)
+    : DEFAULTS.pauseMode;
+  const enhance = enhances.includes(raw.enhance as AudioEnhance)
+    ? (raw.enhance as AudioEnhance)
+    : DEFAULTS.enhance;
+  return {
+    format: raw.format === 'wav' ? 'wav' : 'mp3',
+    gapSec: roundTo(clampOr(raw.gapSec, 0, 2, 0), 1),
+    gainDb: roundTo(clampOr(raw.gainDb, -12, 12, 0), 1),
+    enhance,
+    bitrate: [128, 192, 320].includes(Number(raw.bitrate)) ? Number(raw.bitrate) : 192,
+    bits: Number(raw.bits) === 24 ? 24 : 16,
+    channels: Number(raw.channels) === 2 ? 2 : 1,
+    pauseMode,
+    pauseThresholdSec: roundTo(clampOr(raw.pauseThresholdSec, 0.3, 2, 0.6), 1),
+    pauseTargetSec: roundTo(clampOr(raw.pauseTargetSec, 0.1, 1, 0.3), 1),
+  };
 }
 
 function statusLabel(job: AudioExportJob): string {
@@ -284,12 +251,12 @@ export function AudioExportDialog() {
   const changePauseThreshold = (next: number) => {
     setPauseMode('custom');
     setPauseThresholdSec(next);
-    setPauseTargetSec((current) => Math.min(current, Math.max(0.1, round1(next - 0.1))));
+    setPauseTargetSec((current) => Math.min(current, Math.max(0.1, roundTo(next - 0.1, 1))));
   };
 
   const changePauseTarget = (next: number) => {
     setPauseMode('custom');
-    setPauseTargetSec(Math.min(next, Math.max(0.1, round1(pauseThresholdSec - 0.1))));
+    setPauseTargetSec(Math.min(next, Math.max(0.1, roundTo(pauseThresholdSec - 0.1, 1))));
   };
 
   const start = () => {
@@ -305,11 +272,7 @@ export function AudioExportDialog() {
       pauseThresholdSec,
       pauseTargetSec,
     };
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
-    } catch {
-      // 隐私模式下写不了本地存储，不影响本次导出
-    }
+    writeStoredJson('local', STORAGE_KEY, settings);
     void startAudioExport({
       ...settings,
       allowMissing,
@@ -413,7 +376,7 @@ export function AudioExportDialog() {
           <div className="export-warn-title">还有 {missing.length} 个音频节点没有生成</div>
           <div className="export-warn-list">
             {missing.slice(0, 12).map((no) => (
-              <span key={no}>音频 {String(no).padStart(2, '0')}</span>
+              <span key={no}>音频 {pad(no)}</span>
             ))}
             {missing.length > 12 && <span>等 {missing.length} 个</span>}
           </div>
@@ -591,7 +554,7 @@ export function AudioExportDialog() {
               className={`export-history-row ${job?.id === item.id ? 'on' : ''}`}
               onClick={() => viewAudioExport(item)}
             >
-              <span className="export-history-time">{formatTime(item.createdAt)}</span>
+              <span className="export-history-time">{formatDateTime(item.createdAt)}</span>
               <span className="export-history-meta">
                 {String(item.options.format || 'mp3').toUpperCase()} · {item.nodes} 条 ·{' '}
                 {clock(item.durationSec)} · {formatSize(item.size)}

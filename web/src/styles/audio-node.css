@@ -1,0 +1,215 @@
+/* =========================================================
+   音频节点
+   ========================================================= */
+
+.audio-node {
+  font-size: 12.5px;
+  color: var(--text);
+}
+
+.audio-card {
+  gap: 8px;
+  padding: 10px 11px 9px;
+}
+
+.audio-node:hover .node-card {
+  border-color: var(--line-3);
+}
+
+.audio-node.is-selected .node-card {
+  border-color: color-mix(in srgb, var(--audio) 56%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--audio) 28%, transparent),
+    var(--node-shadow);
+}
+
+.audio-node.is-running .node-card {
+  border-color: color-mix(in srgb, var(--audio) 38%, var(--line-2));
+  animation: node-glow 2.6s ease-in-out infinite;
+}
+
+.audio-node.is-error .node-card {
+  border-color: color-mix(in srgb, var(--danger) 40%, var(--line-2));
+}
+
+.audio-node.is-stale .node-card {
+  border-color: color-mix(in srgb, var(--warn) 34%, var(--line-2));
+}
+
+.audio-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 18px;
+  user-select: none;
+}
+
+.audio-no {
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.audio-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 17px;
+  padding: 0 6px;
+  border-radius: 5px;
+  border: 1px solid color-mix(in srgb, var(--audio) 28%, transparent);
+  background: var(--audio-soft);
+  color: var(--audio);
+  font-size: 9.5px;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.audio-badge.warn {
+  color: var(--warn);
+  border-color: color-mix(in srgb, var(--warn) 28%, transparent);
+  background: color-mix(in srgb, var(--warn) 10%, transparent);
+}
+
+.audio-badge.error {
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 32%, transparent);
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+}
+
+.audio-head-meta {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-2);
+  white-space: nowrap;
+}
+
+.audio-body {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.audio-play {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid color-mix(in srgb, var(--audio) 44%, transparent);
+  background: var(--audio-soft);
+  color: var(--audio);
+  cursor: pointer;
+  transition: background 0.16s ease, border-color 0.16s ease, transform 0.16s ease;
+}
+
+.audio-play:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--audio) 20%, transparent);
+  border-color: color-mix(in srgb, var(--audio) 66%, transparent);
+}
+
+.audio-play:active:not(:disabled) {
+  transform: scale(0.94);
+}
+
+.audio-play:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.audio-play.is-empty {
+  border-color: var(--line-2);
+  background: var(--surface-3);
+  color: var(--dim);
+}
+
+.audio-track {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  height: 34px;
+  overflow: hidden;
+  border-radius: 6px;
+  cursor: pointer;
+  touch-action: none;
+  user-select: none;
+}
+
+.audio-track.is-empty {
+  cursor: default;
+}
+
+.audio-wave {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.audio-wave i {
+  flex: 1;
+  min-width: 1px;
+  min-height: 2px;
+  border-radius: 999px;
+}
+
+.audio-wave-base i {
+  background: var(--wave-base);
+}
+
+.audio-wave-fill {
+  clip-path: inset(0 calc(100% - var(--audio-progress, 0%)) 0 0);
+}
+
+.audio-wave-fill i {
+  background: var(--audio);
+}
+
+.audio-scan {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -40%;
+  width: 40%;
+  pointer-events: none;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--audio) 26%, transparent),
+    transparent
+  );
+  animation: audio-sweep 1.5s linear infinite;
+}
+
+@keyframes audio-sweep {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(360%);
+  }
+}
+
+.audio-time {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--dim);
+  white-space: nowrap;
+}
+
+.audio-text {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--text-2);
+}

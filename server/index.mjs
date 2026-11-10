@@ -3,13 +3,14 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { config } from './config.mjs';
 import { ProjectManager, ID_PATTERN } from './projects.mjs';
-import { parseCsv } from './csv.mjs';
+import { parseCsv } from './utils/csv.mjs';
 import { buildProject } from './import.mjs';
 import { createProvider } from './providers/index.mjs';
 import { createIndexTTSProvider } from './providers/indextts.mjs';
 import { AICLONE_MODELS } from './providers/aiclone.mjs';
 import { Settings, SETTING_LIMITS, AUDIO_INFER_MODES } from './settings.mjs';
 import { hashPrompt } from './hash.mjs';
+import { roundTo } from './utils/num.mjs';
 import { saveAsset, pruneAssets } from './assets.mjs';
 import { Usage } from './usage.mjs';
 import { audioPeaks, extractPoster, probeVideo, probeAudio } from './video.mjs';
@@ -441,10 +442,6 @@ function removeVideoAssets(store, nodeId, video) {
   }
 }
 
-function roundSeconds(value) {
-  return Math.round(value * 1000) / 1000;
-}
-
 async function writeVideoPoster(runtime, nodeId, video, atSec) {
   const source = path.join(runtime.store.assetsDir, nodeId, video.filename);
   const posterName = `${video.filename.replace(/\.[^.]+$/, '')}-poster.jpg`;
@@ -732,10 +729,10 @@ projectRouter.post('/nodes/:id/video', videoBody, async (req, res) => {
     filename: asset.filename,
     url: asset.url,
     posterUrl: null,
-    durationSec: roundSeconds(meta.durationSec),
+    durationSec: roundTo(meta.durationSec, 3),
     width: meta.width,
     height: meta.height,
-    fps: Math.round(meta.fps * 100) / 100,
+    fps: roundTo(meta.fps, 2),
     inPoint: 0,
     addedAt: new Date().toISOString(),
   };
@@ -768,7 +765,7 @@ projectRouter.patch('/nodes/:id/video', async (req, res) => {
     return;
   }
   const max = Math.max(0, video.durationSec - 0.1);
-  video.inPoint = roundSeconds(Math.min(value, max));
+  video.inPoint = roundTo(Math.min(value, max), 3);
   await writeVideoPoster(runtime, node.id, video, video.inPoint + 0.05);
   node.data.video = video;
   store.save();

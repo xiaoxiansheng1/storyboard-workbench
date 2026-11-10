@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { roundTo } from './utils/num.mjs';
 
 function runTool(bin, args, timeoutMs = 30000) {
   return new Promise((resolve, reject) => {
@@ -166,7 +167,7 @@ export function audioPeaks(ffmpegPath, file, count = 180) {
         raw.push(rms);
         if (rms > max) max = rms;
       }
-      resolve(max ? raw.map((value) => Math.round(Math.pow(value / max, 0.6) * 1000) / 1000) : []);
+      resolve(max ? raw.map((value) => roundTo(Math.pow(value / max, 0.6), 3)) : []);
     });
   });
 }

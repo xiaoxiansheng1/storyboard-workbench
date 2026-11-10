@@ -8,7 +8,7 @@ import { useWorkbench } from './store';
 document.documentElement.dataset.theme = useWorkbench.getState().theme;
 
 createRoot(document.getElementById('root')!).render(
-  <BrowserRouter>
+  <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
     <App />
   </BrowserRouter>,
 );

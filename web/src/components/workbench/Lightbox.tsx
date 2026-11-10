@@ -1,6 +1,7 @@
 import { useWorkbench } from '../../store';
 import type { ShotData } from '../../types';
 import { Modal } from '../common/Modal';
+import { pad } from '../../utils/format';
 
 export function Lightbox() {
   const lightbox = useWorkbench((s) => s.lightbox);
@@ -18,7 +19,7 @@ export function Lightbox() {
 
   return (
     <Modal
-      title={`镜头 ${String(data.no).padStart(2, '0')}`}
+      title={`镜头 ${pad(data.no)}`}
       onClose={() => setLightbox(null)}
       size="xl"
       className="lightbox-modal"

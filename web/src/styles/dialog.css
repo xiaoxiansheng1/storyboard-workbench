@@ -1,0 +1,207 @@
+/* =========================================================
+   弹窗
+   ========================================================= */
+
+.modal-note {
+  margin: 12px 0 0;
+  font-size: 11.5px;
+  line-height: 1.7;
+  color: var(--muted);
+}
+
+.modal-note.warn,
+.modal-note .warn {
+  color: var(--warn);
+}
+
+.file-input {
+  display: none;
+}
+
+.dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 32px 20px;
+  border: 1px dashed var(--line-3);
+  border-radius: 12px;
+  background: var(--surface-2);
+  cursor: pointer;
+  text-align: center;
+  transition: border-color 0.14s ease, background 0.14s ease;
+}
+
+.dropzone:hover,
+.dropzone:focus-visible,
+.dropzone.dragging {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  outline: none;
+}
+
+.dropzone-title {
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.dropzone-hint {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.dropzone-action {
+  margin-top: 6px;
+  display: inline-flex;
+  align-items: center;
+  height: 30px;
+  padding: 0 14px;
+  border: 1px solid var(--line-2);
+  border-radius: 8px;
+  background: var(--btn-bg);
+  font-size: 12px;
+  color: var(--text-2);
+}
+
+.dropzone:hover .dropzone-action,
+.dropzone.dragging .dropzone-action {
+  border-color: var(--line-3);
+  color: var(--text);
+}
+
+.import-file {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding: 9px 11px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-2);
+}
+
+.import-file-main {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+}
+
+.import-file-main b {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.import-file-main span {
+  flex: none;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.import-file .import-reselect {
+  flex: none;
+  height: 28px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
+.field {
+  display: block;
+  margin-bottom: 10px;
+}
+
+.field > span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 5px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.field input[type='text'],
+.field input[type='password'] {
+  width: 100%;
+}
+
+.csv-preview {
+  margin: 0;
+  max-height: 300px;
+  overflow: auto;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-2);
+  font-family: var(--font-ui);
+  font-size: 11.5px;
+  line-height: 1.75;
+  color: var(--text-2);
+  white-space: pre;
+  tab-size: 4;
+}
+
+.import-summary {
+  padding: 18px 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-2);
+  text-align: center;
+}
+
+.import-summary-name {
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.summary-grid {
+  display: flex;
+  justify-content: center;
+  gap: 32px;
+  margin-top: 14px;
+}
+
+.summary-grid div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.summary-grid b {
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.summary-grid span {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.summary-warnings {
+  margin: 16px 0 0;
+  padding: 12px 0 0;
+  border-top: 1px solid var(--line);
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  text-align: left;
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+
+.summary-warnings li::before {
+  content: '·';
+  margin-right: 6px;
+  color: var(--warn);
+}

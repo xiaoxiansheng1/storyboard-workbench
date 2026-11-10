@@ -1,12 +1,8 @@
 import path from 'node:path';
 import { pruneAssets, saveAsset } from './assets.mjs';
 import { buildPrompt } from './prompt.mjs';
-
-const clampInt = (value, min, max, fallback) => {
-  const n = Number(value);
-  if (!Number.isFinite(n)) return fallback;
-  return Math.max(min, Math.min(max, Math.trunc(n)));
-};
+import { clampInt } from './utils/num.mjs';
+import { messageOf } from './utils/message.mjs';
 
 const RETRY_DELAY_MS = 1200;
 const FATAL = /未配置|未找到|401|402|403|unauthorized|invalid.{0,20}key|提示词为空|上限|已删除|不存在/i;
@@ -145,7 +141,7 @@ export function createJobs({
             settle(node, { status: node.data.run.candidates.length ? 'done' : 'idle' });
             return;
           }
-          settle(node, { status: 'error', error: error?.message || String(error) });
+          settle(node, { status: 'error', error: messageOf(error) });
           console.error(`[job] ${job.nodeId} 失败:`, error?.message || error);
         })
         .finally(() => {

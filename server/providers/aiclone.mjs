@@ -1,5 +1,7 @@
 import { downloadImage } from './download.mjs';
 import { timeoutSignal } from './signal.mjs';
+import { delay, withRetry } from '../utils/retry.mjs';
+import { errorText } from '../utils/message.mjs';
 
 export const AICLONE_MODELS = [
   {
@@ -63,31 +65,6 @@ function readState(payload) {
     return { url: '', status: 'failed', message };
   }
   return { url: '', status: status || 'pending' };
-}
-
-function errorText(json, text) {
-  if (typeof json?.error === 'string') return json.error;
-  if (json?.error?.message) return json.error.message;
-  if (json?.message) return json.message;
-  return text.slice(0, 300);
-}
-
-const delay = (ms) => new Promise((resolve) => setTimeout(resolve, Math.max(0, ms)));
-const RETRYABLE = /HTTP (5\d\d|429)|fetch failed|network|timeout|aborted|ECONNRESET|ETIMEDOUT|ENOTFOUND|EAI_AGAIN/i;
-
-// 仅用于幂等的轮询 GET；创建任务的 POST 不重试，避免重复扣积分
-async function withRetry(fn, attempts = 2) {
-  let last;
-  for (let i = 0; i < attempts; i += 1) {
-    try {
-      return await fn();
-    } catch (error) {
-      last = error;
-      if (i === attempts - 1 || !RETRYABLE.test(String(error?.message || error))) throw error;
-      await delay(500 * (i + 1));
-    }
-  }
-  throw last;
 }
 
 export function createAicloneProvider(config, initialModel) {

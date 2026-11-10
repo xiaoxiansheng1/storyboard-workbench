@@ -1,4 +1,4 @@
-import crypto from 'node:crypto';
+import { sha1Short } from './utils/digest.mjs';
 
 export function emptyRun() {
   return {
@@ -20,9 +20,5 @@ export function hashPrompt(data) {
     data.negativeZh || '',
     data.negativeEn || '',
   ].join('\u0000');
-  return crypto.createHash('sha1').update(raw).digest('hex').slice(0, 12);
-}
-
-export function round2(value) {
-  return Math.round(value * 100) / 100;
+  return sha1Short(raw);
 }

@@ -2,13 +2,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { spawn } from 'node:child_process';
+import { roundTo } from './utils/num.mjs';
+import { fileTimestamp } from './utils/time.mjs';
+import { messageOf } from './utils/message.mjs';
 
 const HISTORY_LIMIT = 20;
-
-function timestamp(date) {
-  const p = (n) => String(n).padStart(2, '0');
-  return `${date.getFullYear()}${p(date.getMonth() + 1)}${p(date.getDate())}-${p(date.getHours())}${p(date.getMinutes())}${p(date.getSeconds())}`;
-}
 
 function normalizeOptions(raw = {}) {
   const width = Math.trunc(Number(raw.width));
@@ -42,7 +40,7 @@ function normalizeOptions(raw = {}) {
       quality,
       motion,
       transition,
-      transitionSec: Math.round(transitionSec * 10) / 10,
+      transitionSec: roundTo(transitionSec, 1),
       allowMissing: Boolean(raw.allowMissing),
     },
   };
@@ -461,7 +459,7 @@ export function createExports({
       }
 
       ensureAlive(run);
-      const filename = `storyboard-${timestamp(new Date(job.createdAt))}-${job.id.slice(-4)}.mp4`;
+      const filename = `storyboard-${fileTimestamp(new Date(job.createdAt))}-${job.id.slice(-4)}.mp4`;
       const output = path.join(dir, filename);
 
       if (crossfade) {
@@ -556,7 +554,7 @@ export function createExports({
       } else {
         job.status = 'error';
         job.stage = '合成失败';
-        job.error = error?.message || String(error);
+        job.error = messageOf(error);
       }
       finish(run, job);
       if (!run.canceled) console.error(`[export] ${job.id} 失败:`, job.error);

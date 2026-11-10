@@ -4,6 +4,7 @@ import { useWorkbench } from '../../store';
 import type { ShotData, WorkbenchConfig } from '../../types';
 import { Modal } from '../common/Modal';
 import { Button } from '../common/Button';
+import { pad } from '../../utils/format';
 
 type ShotState = { tone: 'ready' | 'todo' | 'busy'; label: string; framed: boolean };
 
@@ -37,8 +38,6 @@ function shotState(node: Node<ShotData>, config: WorkbenchConfig | null): ShotSt
   if (run.status === 'error') return { tone: 'todo', label: '上次生成失败', framed };
   return { tone: 'todo', label: '参数已变', framed };
 }
-
-const pad = (no: number) => String(no).padStart(2, '0');
 
 export function BatchDialog() {
   const open = useWorkbench((s) => s.batchOpen);

@@ -1,4 +1,5 @@
-import { emptyRun, hashPrompt, round2 } from './hash.mjs';
+import { emptyRun, hashPrompt } from './hash.mjs';
+import { pad2, roundTo } from './utils/num.mjs';
 
 const GRID_X = 120;
 const GRID_Y = 80;
@@ -92,10 +93,10 @@ export function buildProject(rows, { name, sourceFile } = {}) {
 
     const durationCell = Number.parseFloat(pick(row, index, ALIASES.duration));
     const duration = Number.isFinite(durationCell)
-      ? round2(durationCell)
-      : round2(Math.max(0, endSec - startSec));
+      ? roundTo(durationCell, 2)
+      : roundTo(Math.max(0, endSec - startSec), 2);
     if (Number.isFinite(durationCell) && Math.abs(durationCell - (endSec - startSec)) > 0.06) {
-      warnings.push(`镜号 ${no} 时长列 ${durationCell}s 与时间码差 ${round2(endSec - startSec)}s 不一致，已按时长列生成`);
+      warnings.push(`镜号 ${no} 时长列 ${durationCell}s 与时间码差 ${roundTo(endSec - startSec, 2)}s 不一致，已按时长列生成`);
     }
 
     const promptZh = pick(row, index, ALIASES.promptZh);
@@ -108,7 +109,7 @@ export function buildProject(rows, { name, sourceFile } = {}) {
       anchor = /\[B\]|无人物|no people/i.test(`${promptZh} ${promptEn}`) ? 'B' : 'A';
     }
 
-    let id = `shot-${String(no).padStart(2, '0')}`;
+    let id = `shot-${pad2(no)}`;
     if (usedIds.has(id)) id = `${id}-${i + 1}`;
     usedIds.add(id);
 
@@ -116,8 +117,8 @@ export function buildProject(rows, { name, sourceFile } = {}) {
       no,
       srtStart: startRaw,
       srtEnd: endRaw,
-      startSec: round2(startSec),
-      endSec: round2(endSec),
+      startSec: roundTo(startSec, 2),
+      endSec: roundTo(endSec, 2),
       duration,
       anchor,
       caption: pick(row, index, ALIASES.caption),
@@ -170,7 +171,7 @@ export function buildProject(rows, { name, sourceFile } = {}) {
     laneB: nodes.filter((n) => n.data.anchor === 'B').length,
     firstStart: ordered.length ? ordered[0].data.startSec : 0,
     lastEnd: ordered.length ? ordered[ordered.length - 1].data.endSec : 0,
-    span: ordered.length ? round2(ordered[ordered.length - 1].data.endSec - ordered[0].data.startSec) : 0,
+    span: ordered.length ? roundTo(ordered[ordered.length - 1].data.endSec - ordered[0].data.startSec, 2) : 0,
     warnings,
   };
 

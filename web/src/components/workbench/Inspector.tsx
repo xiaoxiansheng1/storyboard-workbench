@@ -4,6 +4,7 @@ import { useWorkbench } from '../../store';
 import type { ShotData } from '../../types';
 import { ChevronRight, Copy, Download, Film, Image as ImageIcon, Trash2, Upload, X } from 'lucide-react';
 import { Button } from '../common/Button';
+import { pad } from '../../utils/format';
 import { Segmented } from '../common/Segmented';
 import {
   Collapsible,
@@ -185,7 +186,7 @@ export function ShotInspector({ node }: { node: Node<ShotData> }) {
     <aside className="inspector">
       <header className="inspector-head">
         <div className="inspector-head-main">
-          <span className="inspector-no">{String(data.no).padStart(2, '0')}</span>
+          <span className="inspector-no">{pad(data.no)}</span>
           <span className={`anchor-tag ${data.anchor === 'B' ? 'b' : 'a'}`}>
             {data.anchor} {data.anchor === 'B' ? '空镜' : '人物'}
           </span>

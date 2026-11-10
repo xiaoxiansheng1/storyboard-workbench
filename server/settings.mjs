@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { readJsonSafe, writeJsonAtomic } from './utils/json-file.mjs';
 
 export const AUDIO_INFER_MODES = ['普通推理', '批次推理'];
 
@@ -36,19 +37,13 @@ export class Settings {
   }
 
   #load() {
-    try {
-      return normalize(JSON.parse(fs.readFileSync(this.file, 'utf8')));
-    } catch {
-      return {};
-    }
+    return readJsonSafe(this.file, {}, normalize);
   }
 
   patch(values) {
     Object.assign(this.data, normalize(values));
     fs.mkdirSync(this.dir, { recursive: true });
-    const tmp = `${this.file}.tmp`;
-    fs.writeFileSync(tmp, JSON.stringify(this.data, null, 2), 'utf8');
-    fs.renameSync(tmp, this.file);
+    writeJsonAtomic(this.file, this.data);
     return this.data;
   }
 }

@@ -35,6 +35,7 @@ import { AudioAddDialog } from '../components/workbench/AudioAddDialog';
 import { AudioExportDialog } from '../components/workbench/AudioExportDialog';
 import { SelectionBar } from '../components/workbench/SelectionBar';
 import { EmptyState } from '../components/workbench/EmptyState';
+import { readStoredJson, writeStoredJson } from '../utils/storage';
 
 const nodeTypes = { shot: ShotNode, audio: AudioNode };
 const VIEWPORT_PREFIX = 'storyboard-viewport';
@@ -44,19 +45,17 @@ function viewportKey(projectId: string) {
 }
 
 function readViewport(projectId: string): { x: number; y: number; zoom: number } | null {
-  try {
-    const raw = sessionStorage.getItem(viewportKey(projectId));
-    if (!raw) return null;
-    const value = JSON.parse(raw) as { x?: number; y?: number; zoom?: number };
-    if (
-      typeof value.x === 'number' &&
-      typeof value.y === 'number' &&
-      typeof value.zoom === 'number'
-    ) {
-      return { x: value.x, y: value.y, zoom: value.zoom };
-    }
-  } catch {
-    // 忽略无法读取的旧视口
+  const value = readStoredJson<{ x?: number; y?: number; zoom?: number }>(
+    'session',
+    viewportKey(projectId),
+  );
+  if (!value) return null;
+  if (
+    typeof value.x === 'number' &&
+    typeof value.y === 'number' &&
+    typeof value.zoom === 'number'
+  ) {
+    return { x: value.x, y: value.y, zoom: value.zoom };
   }
   return null;
 }
@@ -232,11 +231,7 @@ export function WorkbenchCanvas({ projectId }: { projectId: string }) {
   };
 
   const persistViewport = (viewport: { x: number; y: number; zoom: number }) => {
-    try {
-      sessionStorage.setItem(viewportKey(projectId), JSON.stringify(viewport));
-    } catch {
-      // 忽略持久化失败
-    }
+    writeStoredJson('session', viewportKey(projectId), viewport);
   };
 
   return (
