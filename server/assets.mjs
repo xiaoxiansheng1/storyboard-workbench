@@ -71,3 +71,27 @@ export function saveAsset(assetsDir, nodeId, { data, mime }, urlBase = '/assets'
     url: `${urlBase}/${nodeId}/${filename}`,
   };
 }
+
+// 只保留仍被节点引用的文件，清空候选或重新生成时回收旧图
+export function pruneAssets(assetsDir, nodeId, keep = []) {
+  const dir = path.join(assetsDir, nodeId);
+  let names;
+  try {
+    names = fs.readdirSync(dir);
+  } catch {
+    return 0;
+  }
+  const keepSet = new Set(keep.filter(Boolean));
+  let removed = 0;
+  for (const name of names) {
+    if (keepSet.has(name)) continue;
+    try {
+      fs.rmSync(path.join(dir, name), { force: true });
+      removed += 1;
+    } catch {
+      // 文件已不存在时忽略
+    }
+  }
+  return removed;
+}
+

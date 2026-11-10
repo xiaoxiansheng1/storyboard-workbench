@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { useWorkbench } from '../../store';
 import { Button } from '../common/Button';
+import { TaskCenter } from './TaskCenter';
 
 export function SelectionBar() {
   const nodes = useWorkbench((s) => s.nodes);
@@ -22,8 +23,9 @@ export function SelectionBar() {
   const count = picked.total;
 
   return (
-    <div className={`selection-bar ${selectedId ? 'with-inspector' : ''}`} role="status">
-      <span className="selection-count">
+    <div className={`selection-bar ${selectedId ? 'with-inspector' : ''}`}>
+      <TaskCenter />
+      <span className="selection-count" aria-live="polite">
         {count ? (
           <>
             已选 {picked.shots.length > 0 && <b>{picked.shots.length}</b>}
@@ -50,7 +52,7 @@ export function SelectionBar() {
           type="button"
           variant="primary"
           className="selection-action"
-          onClick={() => void batchAudio(picked.audio)}
+          onClick={() => void batchAudio(picked.audio, true)}
         >
           批量配音
         </Button>

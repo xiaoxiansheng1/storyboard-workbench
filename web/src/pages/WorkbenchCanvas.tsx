@@ -7,6 +7,8 @@ import {
   useNodesInitialized,
   useReactFlow,
   useStore,
+  type Connection,
+  type Edge,
   type Node,
   type NodeMouseHandler,
 } from '@xyflow/react';
@@ -66,6 +68,8 @@ export function WorkbenchCanvas({ projectId }: { projectId: string }) {
   const revision = useWorkbench((s) => s.revision);
   const onNodesChange = useWorkbench((s) => s.onNodesChange);
   const onEdgesChange = useWorkbench((s) => s.onEdgesChange);
+  const connectAudio = useWorkbench((s) => s.connectAudio);
+  const removeAudioLink = useWorkbench((s) => s.removeAudioLink);
   const selectNode = useWorkbench((s) => s.selectNode);
   const beginPositionDrag = useWorkbench((s) => s.beginPositionDrag);
   const commitPositionDrag = useWorkbench((s) => s.commitPositionDrag);
@@ -76,18 +80,31 @@ export function WorkbenchCanvas({ projectId }: { projectId: string }) {
   const applyRun = useWorkbench((s) => s.applyRun);
   const applyAudioRun = useWorkbench((s) => s.applyAudioRun);
   const applyConfig = useWorkbench((s) => s.applyConfig);
+  const resync = useWorkbench((s) => s.resync);
+  const focusSeq = useWorkbench((s) => s.focusSeq);
+  const focusTarget = useWorkbench((s) => s.focusTarget);
   const applyExport = useWorkbench((s) => s.applyExport);
   const applyAudioExport = useWorkbench((s) => s.applyAudioExport);
-  const { fitView, zoomIn, zoomOut } = useReactFlow();
+  const { fitView, zoomIn, zoomOut, setCenter, getZoom } = useReactFlow();
   const minZoomReached = useStore((s) => s.transform[2] <= s.minZoom);
   const maxZoomReached = useStore((s) => s.transform[2] >= s.maxZoom);
   const nodesInitialized = useNodesInitialized();
   const [restoredViewport] = useState(() => readViewport(projectId));
   const [fitted, setFitted] = useState(restoredViewport !== null);
   const lastFit = useRef(restoredViewport ? 0 : -1);
+  const connected = useRef(false);
 
   useEffect(() => {
+    connected.current = false;
     const source = new EventSource('/api/events');
+    source.onopen = () => {
+      // 首次连上时页面自己已经拉过数据，只有重连才需要补齐断线期间的变化
+      if (!connected.current) {
+        connected.current = true;
+        return;
+      }
+      void resync();
+    };
     source.onmessage = (event) => {
       try {
         const message = JSON.parse(event.data) as {
@@ -120,7 +137,19 @@ export function WorkbenchCanvas({ projectId }: { projectId: string }) {
       }
     };
     return () => source.close();
-  }, [applyRun, applyAudioRun, applyConfig, applyExport, applyAudioExport, projectId]);
+  }, [applyRun, applyAudioRun, applyConfig, applyExport, applyAudioExport, resync, projectId]);
+
+  useEffect(() => {
+    if (!focusSeq || !focusTarget) return;
+    const node = useWorkbench.getState().nodes.find((item) => item.id === focusTarget);
+    if (!node) return;
+    const width = node.measured?.width ?? (node.type === 'audio' ? 330 : 360);
+    const height = node.measured?.height ?? 220;
+    void setCenter(node.position.x + width / 2, node.position.y + height / 2, {
+      zoom: Math.max(getZoom(), 0.55),
+      duration: 320,
+    });
+  }, [focusSeq, focusTarget, setCenter, getZoom]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -144,6 +173,31 @@ export function WorkbenchCanvas({ projectId }: { projectId: string }) {
   }, [undoPositions, redoPositions]);
 
   useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Delete' && event.key !== 'Backspace') return;
+      const target = event.target as HTMLElement | null;
+      if (
+        target &&
+        (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))
+      ) {
+        return;
+      }
+      if (document.querySelector('[data-modal-overlay]')) return;
+      const selected = useWorkbench
+        .getState()
+        .edges.find(
+          (edge) =>
+            edge.selected && (edge.data as { kind?: string } | undefined)?.kind === 'audio',
+        );
+      if (!selected) return;
+      event.preventDefault();
+      void removeAudioLink(selected.id);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [removeAudioLink]);
+
+  useEffect(() => {
     if (!ready || !nodesInitialized || nodes.length === 0) return;
     if (lastFit.current === revision) return;
     const first = !fitted;
@@ -155,6 +209,26 @@ export function WorkbenchCanvas({ projectId }: { projectId: string }) {
 
   const handleNodeClick: NodeMouseHandler<Node<WorkbenchNodeData>> = (_event, node) => {
     selectNode(node.id);
+  };
+
+  const isAudioNode = (id: string | null) =>
+    Boolean(id) && nodes.find((node) => node.id === id)?.type === 'audio';
+
+  const isValidConnection = (connection: Connection | Edge) => {
+    if (!connection.source || connection.source === connection.target) return false;
+    if (!isAudioNode(connection.source) || !isAudioNode(connection.target)) return false;
+    const audioLinks = edges.filter(
+      (edge) => (edge.data as { kind?: string } | undefined)?.kind === 'audio',
+    );
+    return (
+      !audioLinks.some((edge) => edge.source === connection.source) &&
+      !audioLinks.some((edge) => edge.target === connection.target)
+    );
+  };
+
+  const handleConnect = (connection: Connection) => {
+    if (!isValidConnection(connection)) return;
+    void connectAudio(connection.source, connection.target);
   };
 
   const persistViewport = (viewport: { x: number; y: number; zoom: number }) => {
@@ -178,7 +252,19 @@ export function WorkbenchCanvas({ projectId }: { projectId: string }) {
           nodeTypes={nodeTypes}
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
+          onConnect={handleConnect}
+          isValidConnection={isValidConnection}
+          connectionLineStyle={{
+            stroke: 'var(--edge)',
+            strokeWidth: 1.3,
+            strokeDasharray: '3 7',
+          }}
           onNodeClick={handleNodeClick}
+          onEdgeDoubleClick={(_event, edge) => {
+            if ((edge.data as { kind?: string } | undefined)?.kind === 'audio') {
+              void removeAudioLink(edge.id);
+            }
+          }}
           onPaneClick={() => selectNode(null)}
           onNodeDragStart={(_event, _node, dragged) => {
             beginPositionDrag(dragged.map((item) => item.id));

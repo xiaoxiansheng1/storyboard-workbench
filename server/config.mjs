@@ -76,6 +76,7 @@ export const config = {
   audio: {
     baseUrl: (env.INDEXTTS_BASE_URL || 'http://127.0.0.1:7860').replace(/\/+$/, ''),
     endpoint: env.INDEXTTS_ENDPOINT || 'gen_single',
+    inferMode: '普通推理',
     timeoutMs: Math.max(30000, Number(env.INDEXTTS_TIMEOUT_MS) || 600000),
     concurrency: Math.max(1, Math.min(4, Number(env.AUDIO_CONCURRENCY) || 1)),
     voiceDir: path.join(dataDir, 'voice'),

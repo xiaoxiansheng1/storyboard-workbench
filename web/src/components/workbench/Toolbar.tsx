@@ -1,8 +1,22 @@
 import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import {
+  ChevronDown,
+  FileSpreadsheet,
+  Moon,
+  PanelTop,
+  Settings,
+  Sun,
+  Volume2,
+} from 'lucide-react';
 import { useWorkbench } from '../../store';
-import { FolderKanban, Moon, PanelTop, Settings, Sun } from 'lucide-react';
 import { Button } from '../common/Button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '../ui/dropdown-menu';
 
 export function Toolbar() {
   const navigate = useNavigate();
@@ -47,13 +61,18 @@ export function Toolbar() {
 
   return (
     <header className="toolbar">
-      <div className="brand" title={project?.meta.name || '未导入项目'}>
+      <button
+        type="button"
+        className="brand"
+        onClick={() => navigate('/projects')}
+        title="返回项目列表"
+      >
         <span className="brand-mark">
           <PanelTop size={15} />
         </span>
         <span className="brand-title">分镜工作台</span>
         {project && <span className="brand-project">{project.meta.name}</span>}
-      </div>
+      </button>
 
       <div className="stats">
         <div className="stat">
@@ -81,15 +100,6 @@ export function Toolbar() {
       <div className="toolbar-actions">
         <Button
           type="button"
-          className="toolbar-action"
-          onClick={() => navigate('/projects')}
-          title="项目列表"
-        >
-          <FolderKanban size={14} />
-          项目
-        </Button>
-        <Button
-          type="button"
           className={`toolbar-action${exporting ? ' exporting' : ''}`}
           onClick={() => setExportOpen(true)}
           disabled={stats.shots === 0}
@@ -104,20 +114,24 @@ export function Toolbar() {
         >
           {audioExporting ? `音频 ${audioExportJob?.progress ?? 0}%` : '合成音频'}
         </Button>
-        <Button
-          type="button"
-          className="toolbar-action"
-          onClick={() => setAudioAddOpen(true)}
-        >
-          添加音频
-        </Button>
-        <Button
-          type="button"
-          className="toolbar-action"
-          onClick={() => setImportOpen(true)}
-        >
-          导入 CSV
-        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button type="button" className="toolbar-action">
+              添加
+              <ChevronDown size={13} />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent className="toolbar-menu" align="start" sideOffset={6}>
+            <DropdownMenuItem className="toolbar-menu-item" onSelect={() => setAudioAddOpen(true)}>
+              <Volume2 size={14} />
+              添加音频
+            </DropdownMenuItem>
+            <DropdownMenuItem className="toolbar-menu-item" onSelect={() => setImportOpen(true)}>
+              <FileSpreadsheet size={14} />
+              导入 CSV
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
         <Button
           type="button"
           className="theme-toggle"

@@ -1,4 +1,4 @@
-import { saveAsset } from './assets.mjs';
+import { pruneAssets, saveAsset } from './assets.mjs';
 import { audioPeaks, probeAudio } from './video.mjs';
 import { emptyAudioRun } from './audio.mjs';
 
@@ -13,7 +13,7 @@ export function createAudioJobs({
 }) {
   const queue = [];
   const queued = new Set();
-  const running = new Set();
+  const running = new Map();
   let active = 0;
   let closed = false;
 
@@ -73,7 +73,7 @@ export function createAudioJobs({
       run.progress = { done: 0, total: 1 };
       run.updatedAt = new Date().toISOString();
       queued.add(id);
-      queue.push({ nodeId: id, force, provider });
+      queue.push({ nodeId: id, force, provider, cancelled: false, controller: new AbortController() });
       queuedCount += 1;
       emit(node);
     }
@@ -88,13 +88,22 @@ export function createAudioJobs({
     while (active < config.audio.concurrency && queue.length) {
       const job = queue.shift();
       queued.delete(job.nodeId);
-      running.add(job.nodeId);
+      running.set(job.nodeId, job);
       active += 1;
       execute(job)
         .catch((error) => {
           if (closed) return;
           const node = store.node(job.nodeId);
           if (!node) return;
+          if (job.cancelled) {
+            node.data.run.status = node.data.run.candidates.length ? 'done' : 'idle';
+            node.data.run.error = null;
+            node.data.run.progress = null;
+            node.data.run.updatedAt = new Date().toISOString();
+            store.save();
+            emit(node);
+            return;
+          }
           node.data.run.status = 'error';
           node.data.run.error = error?.message || String(error);
           node.data.run.progress = null;
@@ -126,6 +135,7 @@ export function createAudioJobs({
     if (run.textHash !== data.textHash) {
       run.candidates = [];
       run.selectedId = null;
+      pruneAssets(store.assetsDir, node.id, []);
     }
     run.textHash = data.textHash;
     run.signature = signatureFor(node, voice);
@@ -136,7 +146,12 @@ export function createAudioJobs({
     store.save();
     emit(node);
 
-    const result = await job.provider.generate({ text, voice, nodeId: node.id });
+    const result = await job.provider.generate({
+      text,
+      voice,
+      nodeId: node.id,
+      signal: job.controller.signal,
+    });
     if (!result?.data?.length) throw new Error('语音接口没有返回音频数据');
     if (closed) throw new Error('项目已删除');
 
@@ -179,16 +194,75 @@ export function createAudioJobs({
     if (!node || node.type !== 'audio') return null;
     node.data.run = emptyAudioRun();
     node.data.run.textHash = node.data.textHash;
+    pruneAssets(store.assetsDir, node.id, []);
     store.save();
     emit(node);
     return node;
+  }
+
+  function cancel(nodeId) {
+    const id = String(nodeId || '');
+    const job = running.get(id);
+    if (job) {
+      if (!job.cancelled) {
+        job.cancelled = true;
+        job.controller.abort();
+      }
+      return 'running';
+    }
+    if (queued.has(id)) {
+      queued.delete(id);
+      const index = queue.findIndex((item) => item.nodeId === id);
+      if (index >= 0) queue.splice(index, 1);
+      const node = store.node(id);
+      if (node) {
+        node.data.run.status = node.data.run.candidates.length ? 'done' : 'idle';
+        node.data.run.error = null;
+        node.data.run.progress = null;
+        node.data.run.updatedAt = new Date().toISOString();
+        store.save();
+        emit(node);
+      }
+      return 'queued';
+    }
+    return 'none';
+  }
+
+  function cancelAll() {
+    let cleared = 0;
+    for (const id of queued) {
+      const node = store.node(id);
+      if (!node) continue;
+      node.data.run.status = node.data.run.candidates.length ? 'done' : 'idle';
+      node.data.run.error = null;
+      node.data.run.progress = null;
+      node.data.run.updatedAt = new Date().toISOString();
+      store.save();
+      emit(node);
+      cleared += 1;
+    }
+    queued.clear();
+    queue.length = 0;
+
+    let aborted = 0;
+    for (const job of running.values()) {
+      if (job.cancelled) continue;
+      job.cancelled = true;
+      job.controller.abort();
+      aborted += 1;
+    }
+    return { queued: cleared, running: aborted };
   }
 
   function close() {
     closed = true;
     queue.length = 0;
     queued.clear();
+    for (const job of running.values()) {
+      job.cancelled = true;
+      job.controller.abort();
+    }
   }
 
-  return { enqueue, clear, close };
+  return { enqueue, clear, cancel, cancelAll, close };
 }

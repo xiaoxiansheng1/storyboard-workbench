@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type PointerEvent } from 'react';
 import type { Node, NodeProps } from '@xyflow/react';
+import { Handle, Position } from '@xyflow/react';
 import { AudioLines, Pause, Play } from 'lucide-react';
 import { useWorkbench } from '../../store';
 import type { AudioData } from '../../types';
@@ -9,6 +10,13 @@ const BAR_COUNT = 36;
 
 export function AudioNode({ id, data, selected }: NodeProps<Node<AudioData>>) {
   const projectId = useWorkbench((s) => s.projectId);
+  const edges = useWorkbench((s) => s.edges);
+  const hasIncoming = edges.some(
+    (edge) => edge.target === id && (edge.data as { kind?: string } | undefined)?.kind === 'audio',
+  );
+  const hasOutgoing = edges.some(
+    (edge) => edge.source === id && (edge.data as { kind?: string } | undefined)?.kind === 'audio',
+  );
   const run = data.run;
   const busy = run.status === 'queued' || run.status === 'running';
   const candidate =
@@ -70,6 +78,12 @@ export function AudioNode({ id, data, selected }: NodeProps<Node<AudioData>>) {
 
   return (
     <div className={`audio-node ${selected ? 'is-selected' : ''} ${tone}`}>
+      <Handle
+        type="target"
+        position={Position.Left}
+        className={`port ${hasIncoming ? 'is-locked' : ''}`}
+        isConnectable={!hasIncoming}
+      />
       <div className="node-card audio-card">
         <header className="audio-head">
           <span className="audio-no">音频 {String(data.no).padStart(2, '0')}</span>
@@ -152,6 +166,12 @@ export function AudioNode({ id, data, selected }: NodeProps<Node<AudioData>>) {
           />
         )}
       </div>
+      <Handle
+        type="source"
+        position={Position.Right}
+        className={`port ${hasOutgoing ? 'is-locked' : ''}`}
+        isConnectable={!hasOutgoing}
+      />
     </div>
   );
 }

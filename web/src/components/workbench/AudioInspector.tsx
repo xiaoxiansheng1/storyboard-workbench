@@ -1,10 +1,9 @@
-import { useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
+import { useEffect, useRef, useState, type PointerEvent } from 'react';
 import type { Node } from '@xyflow/react';
 import { useWorkbench } from '../../store';
 import type { AudioData } from '../../types';
 import {
-  ArrowDown,
-  ArrowUp,
+  ChevronRight,
   Download,
   Pause,
   Play,
@@ -15,6 +14,12 @@ import {
 } from 'lucide-react';
 import { Button } from '../common/Button';
 import { Slider } from '../common/Slider';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '../ui/collapsible';
+import { Textarea } from '../ui/textarea';
 import { clock, useAudioProgress, useWaveform } from '../../audioWave';
 
 const BAR_COUNT = 52;
@@ -24,14 +29,12 @@ export function AudioInspector({ node }: { node: Node<AudioData> }) {
   const run = data.run;
   const config = useWorkbench((s) => s.project?.config);
   const projectId = useWorkbench((s) => s.projectId);
-  const nodes = useWorkbench((s) => s.nodes);
   const selectNode = useWorkbench((s) => s.selectNode);
   const setSettingsOpen = useWorkbench((s) => s.setSettingsOpen);
   const patchAudioNode = useWorkbench((s) => s.patchAudioNode);
   const generateAudio = useWorkbench((s) => s.generateAudio);
   const selectAudioCandidate = useWorkbench((s) => s.selectAudioCandidate);
   const clearAudioRun = useWorkbench((s) => s.clearAudioRun);
-  const moveAudioNode = useWorkbench((s) => s.moveAudioNode);
   const deleteAudioNode = useWorkbench((s) => s.deleteAudioNode);
 
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -44,6 +47,7 @@ export function AudioInspector({ node }: { node: Node<AudioData> }) {
   const [playing, setPlaying] = useState(false);
   const [volume, setVolume] = useState(1);
   const [muted, setMuted] = useState(false);
+  const [candidatesOpen, setCandidatesOpen] = useState(run.candidates.length > 1);
 
   const busy = run.status === 'queued' || run.status === 'running';
   const candidate =
@@ -57,14 +61,6 @@ export function AudioInspector({ node }: { node: Node<AudioData> }) {
   const voiceMissing = config?.audio.hasVoice === false;
   const working = busy || submitting;
 
-  const lane = useMemo(
-    () =>
-      nodes
-        .filter((item): item is Node<AudioData> => item.type === 'audio')
-        .sort((a, b) => a.data.no - b.data.no),
-    [nodes],
-  );
-  const laneIndex = lane.findIndex((item) => item.id === node.id);
   const bars = useWaveform(candidate, projectId, node.id, BAR_COUNT, data.textHash || data.text);
   const paint = useAudioProgress({
     audioRef,
@@ -80,6 +76,11 @@ export function AudioInspector({ node }: { node: Node<AudioData> }) {
     setPlaying(false);
     paint();
   }, [node.id, paint]);
+
+  const hasManyCandidates = run.candidates.length > 1;
+  useEffect(() => {
+    setCandidatesOpen(hasManyCandidates);
+  }, [node.id, hasManyCandidates]);
 
   useEffect(() => {
     if (busy) setSubmitting(false);
@@ -179,18 +180,17 @@ export function AudioInspector({ node }: { node: Node<AudioData> }) {
       <header className="inspector-head">
         <div className="inspector-head-main">
           <span className="inspector-no">{String(data.no).padStart(2, '0')}</span>
-          <div className="inspector-meta">
-            <div className="inspector-title-row">
-              <span className="anchor-tag audio-tag">
-                <Volume2 size={10} />
-                音频
-              </span>
-              <span className="inspector-dur">{duration.toFixed(2)}s</span>
-            </div>
-            <div className={`inspector-tc ${run.status === 'error' ? 'is-error' : ''}`}>
-              {statusText}
-            </div>
-          </div>
+          <span className="anchor-tag audio-tag">
+            <Volume2 size={10} />
+            音频
+          </span>
+          <span className="inspector-dur">{duration.toFixed(2)}s</span>
+          <span
+            className={`inspector-inline ${run.status === 'error' ? 'is-error' : ''}`}
+            title={statusText}
+          >
+            {statusText}
+          </span>
         </div>
         <Button variant="icon" type="button" onClick={() => selectNode(null)} title="关闭">
           <X size={15} />
@@ -332,7 +332,6 @@ export function AudioInspector({ node }: { node: Node<AudioData> }) {
           ) : (
             run.status === 'error' && <div className="deck-error">{run.error}</div>
           )}
-          {stale && <div className="deck-hint warn">文本已改，重新生成后会替换当前音频。</div>}
         </div>
 
         <section className="panel">
@@ -340,17 +339,14 @@ export function AudioInspector({ node }: { node: Node<AudioData> }) {
             <span className="eyebrow">配音文本</span>
             <span className="audio-char-count">{text.length} 字</span>
           </div>
-          <textarea
+          <Textarea
             className="audio-text-area"
-            rows={8}
+            rows={6}
             spellCheck={false}
             value={text}
             onChange={(event) => setText(event.target.value)}
           />
           <div className="panel-foot">
-            <span className="audio-foot-note">
-              {dirty ? '文本已修改，尚未保存' : '保存后即可按新文本生成'}
-            </span>
             <Button
               type="button"
               disabled={!dirty || !text.trim() || saving}
@@ -362,88 +358,67 @@ export function AudioInspector({ node }: { node: Node<AudioData> }) {
         </section>
 
         {run.candidates.length > 0 && (
-          <details className="panel collapsible" open={run.candidates.length > 1}>
-            <summary>
+          <Collapsible
+            className="panel collapsible"
+            open={candidatesOpen}
+            onOpenChange={setCandidatesOpen}
+          >
+            <CollapsibleTrigger className="collapsible-trigger">
               <span className="eyebrow">候选音频</span>
               <span className="audio-char-count">{run.candidates.length} 条</span>
-            </summary>
-            <div className="collapsible-body audio-candidates">
-              {run.candidates.map((item) => {
-                const selected = item.id === run.selectedId;
-                const rowPlaying = selected && playing;
-                return (
-                  <div key={item.id} className={`audio-candidate ${selected ? 'on' : ''}`}>
-                    <button
-                      type="button"
-                      className="audio-candidate-play"
-                      onClick={() => {
-                        if (selected) {
-                          const audio = audioRef.current;
-                          if (!audio) return;
-                          if (audio.paused) void audio.play().catch(() => setPlaying(false));
-                          else audio.pause();
-                          return;
-                        }
-                        autoplayRef.current = item.id;
-                        void selectAudioCandidate(node.id, item.id);
-                      }}
-                      title={rowPlaying ? '暂停' : '播放这条候选'}
-                      aria-label={rowPlaying ? '暂停' : '播放这条候选'}
-                    >
-                      {rowPlaying ? <Pause size={11} /> : <Play size={11} />}
-                    </button>
-                    <button
-                      type="button"
-                      className="audio-candidate-main"
-                      onClick={() => void selectAudioCandidate(node.id, item.id)}
-                    >
-                      <span className="audio-candidate-duration">
-                        {item.durationSec.toFixed(2)}s
-                      </span>
-                      <span className="audio-candidate-meta">
-                        {new Date(item.createdAt).toLocaleTimeString('zh-CN', {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })}
-                      </span>
-                      {selected && <span className="audio-candidate-badge">使用中</span>}
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-          </details>
+              <span className="chev">
+                <ChevronRight size={14} />
+              </span>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="collapsible-content">
+              <div className="collapsible-body audio-candidates">
+                {run.candidates.map((item) => {
+                  const selected = item.id === run.selectedId;
+                  const rowPlaying = selected && playing;
+                  return (
+                    <div key={item.id} className={`audio-candidate ${selected ? 'on' : ''}`}>
+                      <button
+                        type="button"
+                        className="audio-candidate-play"
+                        onClick={() => {
+                          if (selected) {
+                            const audio = audioRef.current;
+                            if (!audio) return;
+                            if (audio.paused) void audio.play().catch(() => setPlaying(false));
+                            else audio.pause();
+                            return;
+                          }
+                          autoplayRef.current = item.id;
+                          void selectAudioCandidate(node.id, item.id);
+                        }}
+                        title={rowPlaying ? '暂停' : '播放这条候选'}
+                        aria-label={rowPlaying ? '暂停' : '播放这条候选'}
+                      >
+                        {rowPlaying ? <Pause size={11} /> : <Play size={11} />}
+                      </button>
+                      <button
+                        type="button"
+                        className="audio-candidate-main"
+                        onClick={() => void selectAudioCandidate(node.id, item.id)}
+                      >
+                        <span className="audio-candidate-duration">
+                          {item.durationSec.toFixed(2)}s
+                        </span>
+                        <span className="audio-candidate-meta">
+                          {new Date(item.createdAt).toLocaleTimeString('zh-CN', {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
+                        </span>
+                        {selected && <span className="audio-candidate-badge">使用中</span>}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
         )}
-
-        <section className="panel audio-order">
-          <div className="audio-order-row">
-            <span className="eyebrow">合成顺序</span>
-            <span className="audio-order-index">
-              第 {laneIndex + 1} / {lane.length} 条
-            </span>
-            <Button
-              type="button"
-              className="audio-order-btn"
-              disabled={laneIndex <= 0}
-              onClick={() => void moveAudioNode(node.id, 'up')}
-              title="上移"
-              aria-label="上移"
-            >
-              <ArrowUp size={13} />
-            </Button>
-            <Button
-              type="button"
-              className="audio-order-btn"
-              disabled={laneIndex < 0 || laneIndex >= lane.length - 1}
-              onClick={() => void moveAudioNode(node.id, 'down')}
-              title="下移"
-              aria-label="下移"
-            >
-              <ArrowDown size={13} />
-            </Button>
-          </div>
-          <p className="settings-hint">合成整段音频时按序号拼接。</p>
-        </section>
       </div>
 
       <footer className="inspector-foot">

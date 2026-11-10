@@ -1,11 +1,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-const FIELDS = ['provider', 'imageModel', 'apiKey', 'promptLang', 'audioBaseUrl'];
+export const AUDIO_INFER_MODES = ['普通推理', '批次推理'];
+
+const FIELDS = ['provider', 'imageModel', 'apiKey', 'promptLang', 'audioBaseUrl', 'audioInferMode'];
 
 export const SETTING_LIMITS = {
   concurrency: [1, 8],
-  dailyCap: [1, 10000],
   maxBatch: [1, 500],
 };
 
@@ -13,7 +14,11 @@ function normalize(raw) {
   const data = {};
   if (!raw || typeof raw !== 'object') return data;
   for (const key of FIELDS) {
-    if (typeof raw[key] === 'string' && raw[key].trim()) data[key] = raw[key].trim();
+    if (typeof raw[key] === 'string' && raw[key].trim()) {
+      const value = raw[key].trim();
+      if (key === 'audioInferMode' && !AUDIO_INFER_MODES.includes(value)) continue;
+      data[key] = value;
+    }
   }
   for (const [key, [min, max]] of Object.entries(SETTING_LIMITS)) {
     if (raw[key] === undefined || raw[key] === null || raw[key] === '') continue;

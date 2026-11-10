@@ -105,8 +105,11 @@ export type ProjectNode = ShotNodeModel | AudioNodeModel;
 
 export type WorkbenchNodeData = ShotData | AudioData;
 
+export type AudioInferMode = '普通推理' | '批次推理';
+
 export interface AudioSettings {
   baseUrl: string;
+  inferMode: AudioInferMode;
   hasVoice: boolean;
   voiceName: string | null;
   voiceDurationSec: number | null;

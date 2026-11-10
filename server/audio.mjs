@@ -103,6 +103,73 @@ export function renumberAudio(nodes) {
   return ordered;
 }
 
+const byAudioNo = (a, b) =>
+  (Number(a.data?.no) || 0) - (Number(b.data?.no) || 0) || String(a.id).localeCompare(String(b.id));
+
+// 音频拼接顺序由画布线决定：沿每个链头一路走到尾，未接线的节点按序号补在后面
+export function orderedAudioNodes(nodes, edges = []) {
+  const audio = nodes.filter((node) => node.type === 'audio');
+  const byId = new Map(audio.map((node) => [node.id, node]));
+  const next = new Map();
+  const incoming = new Set();
+  for (const edge of edges) {
+    if (!byId.has(edge.source) || !byId.has(edge.target)) continue;
+    if (edge.source === edge.target || next.has(edge.source) || incoming.has(edge.target)) continue;
+    next.set(edge.source, edge.target);
+    incoming.add(edge.target);
+  }
+
+  const ordered = [];
+  const seen = new Set();
+  const walk = (start) => {
+    let node = start;
+    while (node && !seen.has(node.id)) {
+      seen.add(node.id);
+      ordered.push(node);
+      node = byId.get(next.get(node.id));
+    }
+  };
+
+  audio.filter((node) => !incoming.has(node.id)).sort(byAudioNo).forEach(walk);
+  audio.filter((node) => !seen.has(node.id)).sort(byAudioNo).forEach(walk);
+  return ordered;
+}
+
+// 新建音频时接在链尾，保证画布连线始终能表达完整顺序
+export function audioTailEdges(prev, nodes) {
+  const edges = [];
+  let source = prev?.id || null;
+  for (const node of nodes) {
+    if (source) {
+      edges.push({ id: `audio-edge-${source}-${node.id}`, source, target: node.id, kind: 'audio' });
+    }
+    source = node.id;
+  }
+  return edges;
+}
+
+export function audioChainEdges(nodes) {
+  const ordered = [...nodes].filter((node) => node.type === 'audio').sort(byAudioNo);
+  const edges = [];
+  for (let i = 1; i < ordered.length; i += 1) {
+    const source = ordered[i - 1].id;
+    const target = ordered[i].id;
+    edges.push({ id: `audio-edge-${source}-${target}`, source, target, kind: 'audio' });
+  }
+  return edges;
+}
+
+// 老项目只有序号，没有音频连线：首次打开时按序号补成一条链
+export function ensureAudioLinks(store) {
+  const audio = store.data.nodes.filter((node) => node.type === 'audio');
+  if (audio.length < 2) return false;
+  const ids = new Set(audio.map((node) => node.id));
+  if (store.data.edges.some((edge) => ids.has(edge.source) && ids.has(edge.target))) return false;
+  store.data.edges.push(...audioChainEdges(audio));
+  store.save();
+  return true;
+}
+
 function stripSubtitle(raw) {
   const text = String(raw || '').replace(/\r\n?/g, '\n');
   if (!/-->/.test(text)) return text;

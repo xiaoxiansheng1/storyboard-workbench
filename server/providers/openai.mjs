@@ -1,4 +1,5 @@
 import { decodeBase64, downloadImage, mimeFor } from './download.mjs';
+import { timeoutSignal } from './signal.mjs';
 
 export function createOpenAIProvider(config) {
   const { baseUrl, apiKey, model, size, quality, responseFormat, extraHeaders, extraBody } = config.openai;
@@ -7,7 +8,7 @@ export function createOpenAIProvider(config) {
   return {
     name: 'openai',
     model,
-    async generate({ prompt, seed }) {
+    async generate({ prompt, seed, signal }) {
       if (!apiKey && !Object.keys(extraHeaders).length) {
         throw new Error('未配置 OPENAI_API_KEY；本地无鉴权端点可设置 IMAGE_EXTRA_HEADERS 后再试');
       }
@@ -25,7 +26,7 @@ export function createOpenAIProvider(config) {
         method: 'POST',
         headers,
         body: JSON.stringify(body),
-        signal: AbortSignal.timeout(timeoutMs),
+        signal: timeoutSignal(timeoutMs, signal),
       });
 
       const text = await res.text();
@@ -44,7 +45,7 @@ export function createOpenAIProvider(config) {
         const data = decodeBase64(item.b64_json);
         return { data, mime: mimeFor(data) };
       }
-      if (item.url) return downloadImage(new URL(item.url, `${baseUrl}/`).toString(), timeoutMs);
+      if (item.url) return downloadImage(new URL(item.url, `${baseUrl}/`).toString(), timeoutMs, signal);
 
       throw new Error(`响应格式无法识别（既无 b64_json 也无 url）：${text.slice(0, 300)}`);
     },

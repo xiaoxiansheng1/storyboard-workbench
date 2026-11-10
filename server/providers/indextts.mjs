@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { extFromMime, sniffExt } from '../assets.mjs';
+import { timeoutSignal } from './signal.mjs';
 
 const DEFAULTS = {
   inferMode: '普通推理',
@@ -44,7 +45,7 @@ export function createIndexTTSProvider(config) {
     return `${base()}|${voice.path}|${voice.updatedAt || ''}`;
   }
 
-  async function uploadReference(voice) {
+  async function uploadReference(voice, signal) {
     const key = cacheKey(voice);
     if (uploads.has(key)) return uploads.get(key);
 
@@ -58,7 +59,7 @@ export function createIndexTTSProvider(config) {
     const res = await fetch(`${base()}/gradio_api/upload`, {
       method: 'POST',
       body: form,
-      signal: AbortSignal.timeout(60000),
+      signal: timeoutSignal(60000, signal),
     });
     const text = await res.text();
     if (!res.ok) throw new Error(`上传参考音频失败 HTTP ${res.status}: ${text.slice(0, 200)}`);
@@ -86,12 +87,12 @@ export function createIndexTTSProvider(config) {
     return fileData;
   }
 
-  async function call(pathname, body) {
+  async function call(pathname, body, signal) {
     const res = await fetch(`${base()}${pathname}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
-      signal: AbortSignal.timeout(60000),
+      signal: timeoutSignal(60000, signal),
     });
     const text = await res.text();
     let json = null;
@@ -105,12 +106,12 @@ export function createIndexTTSProvider(config) {
     return json;
   }
 
-  async function readEvents(eventId) {
+  async function readEvents(eventId, signal) {
     const res = await fetch(
       `${base()}/gradio_api/call/${config.audio.endpoint}/${encodeURIComponent(eventId)}`,
       {
         headers: { Accept: 'text/event-stream' },
-        signal: AbortSignal.timeout(config.audio.timeoutMs),
+        signal: timeoutSignal(config.audio.timeoutMs, signal),
       },
     );
     if (!res.ok) {
@@ -209,14 +210,14 @@ export function createIndexTTSProvider(config) {
     return null;
   }
 
-  async function download(file) {
+  async function download(file, signal) {
     const hasUrl = typeof file?.url === 'string' && file.url;
     const hasPath = typeof file?.path === 'string' && file.path;
     if (!hasUrl && !hasPath) throw new Error('生成结果里没有音频文件');
     const url = hasUrl
       ? new URL(file.url, `${base()}/`).toString()
       : `${base()}/gradio_api/file=${encodeURI(file.path)}`;
-    const res = await fetch(url, { signal: AbortSignal.timeout(120000) });
+    const res = await fetch(url, { signal: timeoutSignal(120000, signal) });
     if (!res.ok) throw new Error(`下载生成音频失败 HTTP ${res.status}`);
     const data = Buffer.from(await res.arrayBuffer());
     let mime =
@@ -230,13 +231,13 @@ export function createIndexTTSProvider(config) {
     return { data, mime, ext };
   }
 
-  async function once({ text, voice }) {
-    const fileData = await uploadReference(voice);
+  async function once({ text, voice, signal }) {
+    const fileData = await uploadReference(voice, signal);
     const created = await call(`/gradio_api/call/${config.audio.endpoint}`, {
       data: [
         fileData,
         text,
-        DEFAULTS.inferMode,
+        config.audio.inferMode || DEFAULTS.inferMode,
         DEFAULTS.maxTextTokensPerSentence,
         DEFAULTS.sentencesBucketMaxSize,
         DEFAULTS.doSample,
@@ -248,22 +249,23 @@ export function createIndexTTSProvider(config) {
         DEFAULTS.repetitionPenalty,
         DEFAULTS.maxMelTokens,
       ],
-    });
+    }, signal);
     const eventId = created.event_id || created.eventId;
     if (!eventId) throw new Error(`接口没有返回 event_id：${JSON.stringify(created).slice(0, 200)}`);
-    const result = await readEvents(eventId);
+    const result = await readEvents(eventId, signal);
     const file = pickFile(result);
     if (!file) throw new Error(`生成结果里没有音频文件：${JSON.stringify(result).slice(0, 200)}`);
-    return download(file);
+    return download(file, signal);
   }
 
-  async function generate({ text, voice }) {
+  async function generate({ text, voice, signal }) {
     let lastError;
     for (let attempt = 0; attempt < 2; attempt += 1) {
       try {
-        return await once({ text, voice });
+        return await once({ text, voice, signal });
       } catch (error) {
         lastError = error;
+        if (signal?.aborted) throw error;
         // Gradio 重启后旧的临时文件路径会失效，重新上传一次再试
         if (attempt === 0) {
           uploads.delete(cacheKey(voice));

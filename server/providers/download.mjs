@@ -16,7 +16,7 @@ export function decodeBase64(value) {
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, Math.max(0, ms)));
 const RETRYABLE = /HTTP (5\d\d|429)|fetch failed|network|timeout|aborted|ECONNRESET|ETIMEDOUT|ENOTFOUND|EAI_AGAIN/i;
 
-export async function downloadImage(url, timeoutMs) {
+export async function downloadImage(url, timeoutMs, signal) {
   const absolute = url.startsWith('data:') ? url : new URL(url).toString();
   if (absolute.startsWith('data:')) {
     const mime = /^data:([^;,]+)/.exec(absolute)?.[1] || 'image/png';
@@ -25,7 +25,10 @@ export async function downloadImage(url, timeoutMs) {
   let last;
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
-      const res = await fetch(absolute, { signal: AbortSignal.timeout(timeoutMs) });
+      const timeout = AbortSignal.timeout(timeoutMs);
+      const combined =
+        signal && typeof AbortSignal.any === 'function' ? AbortSignal.any([timeout, signal]) : timeout;
+      const res = await fetch(absolute, { signal: combined });
       if (!res.ok) {
         const error = new Error(`图片下载失败 HTTP ${res.status}`);
         error.status = res.status;
@@ -36,7 +39,7 @@ export async function downloadImage(url, timeoutMs) {
     } catch (error) {
       last = error;
       const retryable = RETRYABLE.test(String(error?.message || error)) || error?.status >= 500 || error?.status === 429;
-      if (attempt === 2 || !retryable) throw error;
+      if (attempt === 2 || !retryable || signal?.aborted) throw error;
       await delay(500 * (attempt + 1));
     }
   }

@@ -20,6 +20,9 @@ npm run dev
 npm run build
 npm start
 # 打开 http://127.0.0.1:8787
+
+# 单元测试：提示词拼装、字幕拆分、比例换算、每日用量
+npm test
 ```
 
 合成视频依赖 **ffmpeg**：默认从 `PATH` 查找，也可以用 `.env` 的 `FFMPEG_PATH` 指定可执行文件。
@@ -33,7 +36,7 @@ npm start
    - 每个镜头生成一张节点卡，`x = SRT 起始秒 × 100px`，A/B 锚点分泳道。
    - 导入是**替换**语义；提示词未变的镜头会保留已生成的图（`reused` 数会提示）。
 2. **生成首帧**：卡片上「生成首帧」→ 任务进队列，SSE 实时刷新进度与缩略图。
-   - 队列并发、每日上限都在 `.env` 里控制。
+   - 队列并发可在系统设置里调整；每日上限由 `.env` 的 `DAILY_IMAGE_CAP` 控制。
    - 相同提示词 + 相同模型/尺寸/张数会命中幂等，直接跳过；卡片上的「再生成」会强制重跑。
 3. **挑选**：点缩略图看大图，灯箱里「设为选用图」；节点上「选」也可直接切换。
    右侧检查器首帧右上角可上传本地图片替换当前首帧（没有首帧时也可直接用上传图），或下载当前图。
@@ -95,30 +98,33 @@ IMAGE_SIZE=1536x1024
 
 ### 生成限制
 
-「系统设置 → 生成限制」可以查看今日用量并修改以下护栏，保存后立即生效（页面设置优先于 `.env`）：
+「系统设置 → 生成限制」可以查看今日全局用量并修改以下护栏，保存后立即生效（页面设置优先于 `.env`）：
 
 | 项目 | 默认 | 范围 | 说明 |
 | --- | --- | --- | --- |
 | 并发数 | `2` | 1–8 | 同时生成的首帧数量，队列会按新值立即调度 |
-| 每日生成上限 | `200` | 1–10000 | 按自然日重置，达到上限后停止提交 |
 | 单次批量上限 | `50` | 1–500 | 一次批量提交的镜头数上限，超出会被服务端拒绝 |
 
-对应的环境变量为 `IMAGE_CONCURRENCY`、`DAILY_IMAGE_CAP`、`MAX_BATCH_SIZE`。
+每日生成上限由 `.env` 的 `DAILY_IMAGE_CAP` 控制（默认 `200`，按自然日重置，所有项目共享同一份计数）；达到上限后停止提交，可在设置里的用量卡片重置当日计数。其余环境变量为 `IMAGE_CONCURRENCY`、`MAX_BATCH_SIZE`。
 
 ## 数据与幂等
 
 ```
 data/
-  project.json        # 节点、边、每镜 run 状态、今日用量
+  usage.json          # 全局每日生成计数（所有项目共享）
+  projects/<id>/
+    project.json      # 节点、边、每镜 run 状态
+    assets/<nodeId>/  # 候选图，文件名带时间戳+随机串
+    exports/          # 合成好的 MP4（storyboard-YYYYMMDD-HHMMSS.mp4）
+    exports.json      # 最近 20 次合成记录
   settings.json       # 系统设置：生图服务、默认模型、AIClone Key、生成限制
-  assets/<nodeId>/    # 候选图，文件名带时间戳+随机串
-  exports/            # 合成好的 MP4（storyboard-YYYYMMDD-HHMMSS.mp4）
-  exports.json        # 最近 20 次合成记录
 ```
 
 - 幂等签名 = `promptHash + provider + model + size + 张数`。命中且候选数足够时跳过。
-- 改提示词会重算 `promptHash`，旧图标记 stale，不自动删除。
+- 改提示词会重算 `promptHash`，旧图标记 stale；重新生成或清空时回收不再被引用的图片文件。
 - 候选图自动选第一张；点击「选」写入 `selectedId`。
+- 批量生成中单张失败会重试一次，仍失败时记录错误并继续生成其余镜头。
+- 画布上方浮动条里的「任务」实时显示当前队列进度（完成数/总数），展开可查看进行中/失败任务、单条取消或重试；队列空闲且无失败任务时入口自动隐藏。「停止全部」会清空排队并从供应商中断已发出的请求。
 - 服务重启时，上次未完成的 `queued / running` 任务会标成失败并提示重新生成，不会永远转圈。
 - 删掉 `data/` 即恢复空画布（候选图一并删除）。
 
@@ -128,14 +134,16 @@ data/
 | --- | --- | --- |
 | GET | `/api/project` | 项目 + 节点 + 边 + 运行配置/用量 |
 | GET | `/api/settings` | 生图服务、默认模型、Key 掩码 |
-| PATCH | `/api/settings` | `{provider, imageModel, apiKey, promptLang, concurrency, dailyCap, maxBatch}`，保存系统设置 |
+| PATCH | `/api/settings` | `{provider, imageModel, apiKey, promptLang, concurrency, maxBatch}`，保存系统设置 |
 | POST | `/api/import` | `{csv, name, sourceFile}`，替换画布 |
 | PATCH | `/api/nodes/:id` | 位置、文案、提示词、负面词 |
 | POST | `/api/nodes/:id/generate` | `{n, force, seed}` |
 | POST | `/api/nodes/:id/select` | `{candidateId}` |
 | POST | `/api/nodes/:id/upload` | `{dataUrl, filename}`，上传本地图片作为当前首帧（≤32 MB） |
-| DELETE | `/api/nodes/:id/run` | 清空该镜的候选记录（不删文件） |
+| DELETE | `/api/nodes/:id/run` | 清空该镜的候选记录，并删除不再被引用的图片文件 |
 | POST | `/api/generate/batch` | `{nodeIds?, scope?, n, force}`，`nodeIds` 优先 |
+| POST | `/api/jobs/cancel` | 取消当前项目排队中和进行中的生成任务 |
+| POST | `/api/jobs/:nodeId/cancel` | 取消单个镜头的生成任务（排队中或进行中） |
 | POST | `/api/usage/reset` | 今日生成计数清零（不删图） |
 | GET | `/api/exports` | 当前合成任务 + 历史记录 |
 | POST | `/api/exports` | `{width,height,fps,fit,quality,motion,allowMissing}`，开始合成（`fit=contain/cover`，`quality=standard/high`，`motion=none/in/out`） |

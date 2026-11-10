@@ -4,6 +4,7 @@ import { useWorkbench } from '../../store';
 import { Modal } from '../common/Modal';
 import { Button } from '../common/Button';
 import { Segmented } from '../common/Segmented';
+import { Textarea } from '../ui/textarea';
 
 type Mode = 'single' | 'import';
 
@@ -169,7 +170,7 @@ export function AudioAddDialog() {
         <>
           <label className="field">
             <span>配音文本</span>
-            <textarea
+            <Textarea
               className="audio-text-area"
               rows={7}
               spellCheck={false}
@@ -200,7 +201,7 @@ export function AudioAddDialog() {
 
           <label className="field">
             <span>文本内容</span>
-            <textarea
+            <Textarea
               className="audio-text-area"
               rows={6}
               spellCheck={false}

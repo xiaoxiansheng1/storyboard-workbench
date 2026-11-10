@@ -8,18 +8,21 @@ import { buildProject } from './import.mjs';
 import { createProvider } from './providers/index.mjs';
 import { createIndexTTSProvider } from './providers/indextts.mjs';
 import { AICLONE_MODELS } from './providers/aiclone.mjs';
-import { Settings, SETTING_LIMITS } from './settings.mjs';
+import { Settings, SETTING_LIMITS, AUDIO_INFER_MODES } from './settings.mjs';
 import { hashPrompt } from './hash.mjs';
-import { saveAsset } from './assets.mjs';
+import { saveAsset, pruneAssets } from './assets.mjs';
+import { Usage } from './usage.mjs';
 import { audioPeaks, extractPoster, probeVideo, probeAudio } from './video.mjs';
 import { VoiceStore } from './voice.mjs';
 import {
   audioLane,
   audioPosition,
+  audioTailEdges,
   createAudioNode,
   firstFreeAudioPosition,
   hashAudio,
   nextAudioNo,
+  orderedAudioNodes,
   renumberAudio,
   splitAudioText,
 } from './audio.mjs';
@@ -32,17 +35,22 @@ if (settings.data.promptLang === 'zh' || settings.data.promptLang === 'en') {
 if (settings.data.audioBaseUrl) {
   config.audio.baseUrl = settings.data.audioBaseUrl.replace(/\/+$/, '');
 }
+if (AUDIO_INFER_MODES.includes(settings.data.audioInferMode)) {
+  config.audio.inferMode = settings.data.audioInferMode;
+}
 for (const key of Object.keys(SETTING_LIMITS)) {
   if (Number.isInteger(settings.data[key])) config[key] = settings.data[key];
 }
 
 const voice = new VoiceStore(config.audio.voiceDir);
 const audioProvider = createIndexTTSProvider(config);
+const usage = new Usage(config.dataDir);
 
 function audioPayload() {
   const current = voice.get();
   return {
     baseUrl: config.audio.baseUrl,
+    inferMode: config.audio.inferMode,
     hasVoice: current.exists,
     voiceName: current.name,
     voiceDurationSec: current.durationSec,
@@ -54,7 +62,7 @@ function audioPayload() {
 }
 
 const PROVIDER_LABELS = { mock: '本地占位', aiclone: 'AIClone', openai: 'OpenAI 兼容' };
-const LIMIT_LABELS = { concurrency: '并发数', dailyCap: '每日生成上限', maxBatch: '单次批量上限' };
+const LIMIT_LABELS = { concurrency: '并发数', maxBatch: '单次批量上限' };
 const DEFAULT_PROJECT_NAME = '未命名项目';
 const providerCache = new Map();
 
@@ -107,6 +115,7 @@ const projects = new ProjectManager({
   getAudioProvider: () => audioProvider,
   getVoice: () => voice.get(),
   broadcast,
+  usage,
 });
 
 const MISSING_KEY_ERROR = /未配置\s*AICLONE_API_KEY/;
@@ -140,7 +149,7 @@ function clearCredentialErrors(matcher) {
 // 之前因缺少 Key 失败的镜头，在 Key 就绪后不应继续显示旧报错
 clearCredentialErrors(MISSING_KEY_ERROR);
 
-function publicConfig(store) {
+function publicConfig() {
   const provider = currentProvider();
   return {
     provider: provider.name,
@@ -151,7 +160,7 @@ function publicConfig(store) {
     promptLang: config.promptLang,
     appendNegative: config.appendNegative,
     dailyCap: config.dailyCap,
-    usage: store ? store.usageCount() : 0,
+    usage: usage.count(),
     concurrency: config.concurrency,
     maxBatch: config.maxBatch,
     hasKey: providerHasKey(provider),
@@ -160,7 +169,7 @@ function publicConfig(store) {
   };
 }
 
-function settingsPayload(store) {
+function settingsPayload() {
   const provider = currentProvider();
   return {
     provider: provider.name,
@@ -175,7 +184,7 @@ function settingsPayload(store) {
     promptLang: config.promptLang,
     size: config.openai.size,
     dailyCap: config.dailyCap,
-    usage: store ? store.usageCount() : 0,
+    usage: usage.count(),
     concurrency: config.concurrency,
     maxBatch: config.maxBatch,
     audio: audioPayload(),
@@ -187,13 +196,8 @@ function projectPayload(runtime) {
     meta: runtime.store.data.meta,
     nodes: runtime.store.data.nodes,
     edges: runtime.store.data.edges,
-    config: publicConfig(runtime.store),
+    config: publicConfig(),
   };
-}
-
-function queryRuntime(req) {
-  const id = typeof req.query.projectId === 'string' ? req.query.projectId : '';
-  return id ? projects.open(id) : null;
 }
 
 const app = express();
@@ -238,7 +242,7 @@ app.delete('/api/projects/:projectId', (req, res) => {
 });
 
 app.get('/api/settings', (req, res) => {
-  res.json(settingsPayload(queryRuntime(req)?.store));
+  res.json(settingsPayload());
 });
 
 app.patch('/api/settings', (req, res) => {
@@ -269,6 +273,13 @@ app.patch('/api/settings', (req, res) => {
     }
     patch.audioBaseUrl = value || 'http://127.0.0.1:7860';
   }
+  if (body.audioInferMode !== undefined) {
+    if (!AUDIO_INFER_MODES.includes(body.audioInferMode)) {
+      res.status(400).json({ error: '推理模式需为「普通推理」或「批次推理」' });
+      return;
+    }
+    patch.audioInferMode = body.audioInferMode;
+  }
   for (const key of Object.keys(SETTING_LIMITS)) {
     if (body[key] === undefined) continue;
     const value = Number(body[key]);
@@ -288,6 +299,7 @@ app.patch('/api/settings', (req, res) => {
   if (patch.apiKey) config.aiclone.apiKey = patch.apiKey;
   if (patch.promptLang) config.promptLang = patch.promptLang;
   if (patch.audioBaseUrl) config.audio.baseUrl = patch.audioBaseUrl;
+  if (patch.audioInferMode) config.audio.inferMode = patch.audioInferMode;
   for (const key of Object.keys(SETTING_LIMITS)) {
     if (patch[key] !== undefined) config[key] = patch[key];
   }
@@ -298,9 +310,8 @@ app.patch('/api/settings', (req, res) => {
     for (const runtime of projects.runtimes.values()) runtime.jobs.refresh();
   }
 
-  broadcast({ type: 'settings', config: publicConfig(null) });
-  const store = queryRuntime(req)?.store;
-  res.json({ settings: settingsPayload(store), config: publicConfig(store) });
+  broadcast({ type: 'settings', config: publicConfig() });
+  res.json({ settings: settingsPayload(), config: publicConfig() });
 });
 
 app.get('/api/audio/health', async (req, res) => {
@@ -468,7 +479,7 @@ projectRouter.get('/project', (req, res) => {
 });
 
 projectRouter.post('/usage/reset', (req, res) => {
-  res.json({ usage: req.project.store.resetUsage() });
+  res.json({ usage: usage.reset() });
 });
 
 projectRouter.post('/import', (req, res) => {
@@ -508,6 +519,7 @@ projectRouter.post('/import', (req, res) => {
 
     // 音频节点独立于镜头，导入分镜只替换镜头，不删除已有音频
     const audioNodes = store.data.nodes.filter((node) => node.type === 'audio');
+    const audioIds = new Set(audioNodes.map((node) => node.id));
     const lane = audioLane(built.nodes);
     if (audioNodes.some((node) => (Number(node.position?.y) || 0) < lane)) {
       const taken = [];
@@ -517,7 +529,16 @@ projectRouter.post('/import', (req, res) => {
         taken.push(node.position);
       }
     }
-    store.replaceProject({ nodes: [...built.nodes, ...audioNodes], edges: built.edges, meta });
+    store.replaceProject({
+      nodes: [...built.nodes, ...audioNodes],
+      edges: [
+        ...built.edges,
+        ...store.data.edges.filter(
+          (edge) => audioIds.has(edge.source) && audioIds.has(edge.target),
+        ),
+      ],
+      meta,
+    });
     res.json({
       project: projectPayload(req.project),
       stats: { ...built.stats, reused },
@@ -652,6 +673,11 @@ projectRouter.delete('/nodes/:id/run', (req, res) => {
     res.status(400).json({ error: '这是音频节点，请使用音频清空接口' });
     return;
   }
+  // 清空候选图时顺手回收文件，但镜头视频和它的海报还要留着
+  const keep = [];
+  const video = node.data.video;
+  if (video?.filename) keep.push(video.filename);
+  if (video?.posterUrl) keep.push(path.basename(video.posterUrl.split('?')[0]));
   node.data.run = {
     status: 'idle',
     candidates: [],
@@ -663,6 +689,7 @@ projectRouter.delete('/nodes/:id/run', (req, res) => {
     updatedAt: new Date().toISOString(),
   };
   store.save();
+  pruneAssets(store.assetsDir, node.id, keep);
   broadcast({ type: 'run', projectId: req.project.id, nodeId: node.id, run: node.data.run });
   res.json({ node });
 });
@@ -765,6 +792,25 @@ projectRouter.delete('/nodes/:id/video', (req, res) => {
   res.json({ node });
 });
 
+projectRouter.post('/jobs/cancel', (req, res) => {
+  const image = req.project.jobs.cancelAll();
+  const audio = req.project.audioJobs.cancelAll();
+  res.json({ image, audio });
+});
+
+projectRouter.post('/jobs/:nodeId/cancel', (req, res) => {
+  const node = req.project.store.node(req.params.nodeId);
+  if (!node) {
+    res.status(404).json({ error: '节点不存在' });
+    return;
+  }
+  const state =
+    node.type === 'audio'
+      ? req.project.audioJobs.cancel(node.id)
+      : req.project.jobs.cancel(node.id);
+  res.json({ state });
+});
+
 projectRouter.post('/generate/batch', (req, res) => {
   const { store, jobs } = req.project;
   const body = req.body || {};
@@ -830,6 +876,7 @@ projectRouter.post('/audio/nodes/batch', (req, res) => {
     return;
   }
   const nodes = [];
+  const tail = orderedAudioNodes(store.data.nodes, store.data.edges).at(-1) || null;
   let no = nextAudioNo(store.data.nodes);
   for (const text of cleaned) {
     const node = createAudioNode({
@@ -840,7 +887,12 @@ projectRouter.post('/audio/nodes/batch', (req, res) => {
     nodes.push(node);
   }
   for (const node of nodes) store.addNode(node);
-  res.json({ nodes });
+  const edges = audioTailEdges(tail, nodes);
+  if (edges.length) {
+    store.data.edges.push(...edges);
+    store.save();
+  }
+  res.json({ nodes, edges });
 });
 
 projectRouter.post('/audio/nodes', (req, res) => {
@@ -850,13 +902,19 @@ projectRouter.post('/audio/nodes', (req, res) => {
     res.status(400).json({ error: '文本不能为空' });
     return;
   }
+  const tail = orderedAudioNodes(store.data.nodes, store.data.edges).at(-1) || null;
   const node = createAudioNode({
     no: nextAudioNo(store.data.nodes),
     text,
     position: audioPosition(store.data.nodes),
   });
   store.addNode(node);
-  res.json({ node });
+  const edges = audioTailEdges(tail, [node]);
+  if (edges.length) {
+    store.data.edges.push(...edges);
+    store.save();
+  }
+  res.json({ node, edges });
 });
 
 projectRouter.patch('/audio/nodes/:id', (req, res) => {
@@ -886,33 +944,73 @@ projectRouter.delete('/audio/nodes/:id', (req, res) => {
   const node = findAudioNode(req, res);
   if (!node) return;
   const { store } = req.project;
+  store.data.edges = store.data.edges.filter(
+    (edge) => edge.source !== node.id && edge.target !== node.id,
+  );
   store.removeNode(node.id);
   fs.rmSync(path.join(store.assetsDir, node.id), { recursive: true, force: true });
   const nodes = renumberAudio(store.data.nodes);
   store.save();
-  res.json({ ok: true, removed: node.id, nodes });
+  res.json({ ok: true, removed: node.id, nodes, edges: store.data.edges });
 });
 
-projectRouter.post('/audio/nodes/:id/move', (req, res) => {
-  const node = findAudioNode(req, res);
-  if (!node) return;
+projectRouter.put('/audio/links', (req, res) => {
   const { store } = req.project;
-  const direction = req.body?.direction === 'up' ? -1 : 1;
-  const ordered = renumberAudio(store.data.nodes);
-  const index = ordered.findIndex((item) => item.id === node.id);
-  const target = ordered[index + direction];
-  if (!target) {
-    res.json({ nodes: ordered });
-    return;
+  const raw = Array.isArray(req.body?.links) ? req.body.links : [];
+  const audio = store.data.nodes.filter((node) => node.type === 'audio');
+  const byId = new Map(audio.map((node) => [node.id, node]));
+  const next = new Map();
+  const targets = new Set();
+  for (const link of raw) {
+    const source = String(link?.source || '');
+    const target = String(link?.target || '');
+    if (!byId.has(source) || !byId.has(target)) {
+      res.status(400).json({ error: '连线只能连接画布中的音频节点' });
+      return;
+    }
+    if (source === target) {
+      res.status(400).json({ error: '音频节点不能连到自己' });
+      return;
+    }
+    if (next.has(source) || targets.has(target)) {
+      res.status(400).json({ error: '每个音频节点只能有一条进线和一条出线' });
+      return;
+    }
+    next.set(source, target);
+    targets.add(target);
   }
-  const no = node.data.no;
-  node.data.no = target.data.no;
-  target.data.no = no;
-  const position = node.position;
-  node.position = target.position;
-  target.position = position;
+  for (const start of next.keys()) {
+    const seen = new Set();
+    let cursor = start;
+    while (next.has(cursor)) {
+      if (seen.has(cursor)) {
+        res.status(400).json({ error: '音频连线不能形成环' });
+        return;
+      }
+      seen.add(cursor);
+      cursor = next.get(cursor);
+    }
+  }
+
+  const links = [...next].map(([source, target]) => ({
+    id: `audio-edge-${source}-${target}`,
+    source,
+    target,
+    kind: 'audio',
+  }));
+  store.data.edges = [
+    ...store.data.edges.filter((edge) => !byId.has(edge.source) || !byId.has(edge.target)),
+    ...links,
+  ];
+  const ordered = orderedAudioNodes(store.data.nodes, store.data.edges);
+  ordered.forEach((node, index) => {
+    node.data.no = index + 1;
+  });
   store.save();
-  res.json({ nodes: [node, target] });
+  res.json({
+    edges: store.data.edges,
+    nodes: ordered.map((node) => ({ id: node.id, data: { no: node.data.no } })),
+  });
 });
 
 projectRouter.post('/audio/nodes/:id/generate', (req, res) => {

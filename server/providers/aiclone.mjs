@@ -1,4 +1,5 @@
 import { downloadImage } from './download.mjs';
+import { timeoutSignal } from './signal.mjs';
 
 export const AICLONE_MODELS = [
   {
@@ -96,7 +97,7 @@ export function createAicloneProvider(config, initialModel) {
 
   const apiKey = () => String(config.aiclone.apiKey || '').trim();
 
-  async function request(path, init) {
+  async function request(path, init, signal) {
     const key = apiKey();
     if (!key) throw new Error('未配置 AICLONE_API_KEY，请在「系统设置」中填写');
 
@@ -107,7 +108,7 @@ export function createAicloneProvider(config, initialModel) {
         Authorization: `Bearer ${key}`,
         ...(init?.headers || {}),
       },
-      signal: AbortSignal.timeout(config.timeoutMs),
+      signal: timeoutSignal(config.timeoutMs, signal),
     });
 
     const text = await res.text();
@@ -124,23 +125,27 @@ export function createAicloneProvider(config, initialModel) {
     return json;
   }
 
-  async function resolveImage(url, ratio) {
+  async function resolveImage(url, ratio, signal) {
     const absolute = url.startsWith('data:')
       ? url
       : new URL(url, `${config.aiclone.baseUrl}/`).toString();
-    const image = await downloadImage(absolute, config.timeoutMs);
+    const image = await downloadImage(absolute, config.timeoutMs, signal);
     return { ...image, size: ratio };
   }
 
-  async function generate({ prompt, size, seed }) {
+  async function generate({ prompt, size, seed, signal }) {
     const ratio = toImageRatio(size);
     const body = { prompt, model, size: ratio };
     if (config.requestSeed && seed !== undefined) body.seed = seed;
 
-    const created = await request('/api/v2/image/generate', {
-      method: 'POST',
-      body: JSON.stringify(body),
-    });
+    const created = await request(
+      '/api/v2/image/generate',
+      {
+        method: 'POST',
+        body: JSON.stringify(body),
+      },
+      signal,
+    );
 
     const taskId =
       created.task_id ||
@@ -151,7 +156,7 @@ export function createAicloneProvider(config, initialModel) {
       created.data?.id;
     const initial = readState(created);
 
-    if (initial.url) return resolveImage(initial.url, ratio);
+    if (initial.url) return resolveImage(initial.url, ratio, signal);
     if (initial.status === 'failed') {
       throw new Error(`生成失败：${initial.message || '供应商返回失败状态'}`);
     }
@@ -163,14 +168,15 @@ export function createAicloneProvider(config, initialModel) {
     let lastStatus = initial.status;
     while (Date.now() < deadline) {
       await delay(Math.min(config.aiclone.pollMs, deadline - Date.now()));
+      if (signal?.aborted) throw new Error('已取消');
       if (Date.now() >= deadline) break;
 
       const payload = await withRetry(() =>
-        request(`/api/v2/tasks/${encodeURIComponent(taskId)}`, { method: 'GET' }),
+        request(`/api/v2/tasks/${encodeURIComponent(taskId)}`, { method: 'GET' }, signal),
       );
       const state = readState(payload);
       lastStatus = state.status;
-      if (state.url) return resolveImage(state.url, ratio);
+      if (state.url) return resolveImage(state.url, ratio, signal);
       if (state.status === 'failed') {
         throw new Error(`生成失败：${state.message || '供应商返回失败状态'}`);
       }

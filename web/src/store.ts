@@ -16,6 +16,7 @@ import type {
   AudioExportList,
   AudioExportOptions,
   AudioImportResponse,
+  AudioInferMode,
   AudioRun,
   AudioSplitResponse,
   ExportJob,
@@ -58,19 +59,28 @@ function toFlowNode(node: ProjectNode): Node<WorkbenchNodeData> {
   };
 }
 
-function toFlowEdge(edge: { id: string; source: string; target: string }): Edge {
+function toFlowEdge(edge: { id: string; source: string; target: string; kind?: string }): Edge {
+  const audio = edge.kind === 'audio';
   return {
     id: edge.id,
     source: edge.source,
     target: edge.target,
     type: 'smoothstep',
-    selectable: false,
-    className: 'shot-edge',
-    style: {
-      stroke: 'var(--edge)',
-      strokeWidth: 1.3,
-      strokeDasharray: '3 7',
-    },
+    selectable: audio,
+    interactionWidth: audio ? 16 : 20,
+    className: audio ? 'audio-edge' : 'shot-edge',
+    data: { kind: audio ? 'audio' : 'shot' },
+    style: audio
+      ? {
+          stroke: 'var(--edge)',
+          strokeWidth: 1.3,
+          strokeDasharray: '3 7',
+        }
+      : {
+          stroke: 'var(--edge)',
+          strokeWidth: 1.3,
+          strokeDasharray: '3 7',
+        },
   };
 }
 
@@ -162,6 +172,9 @@ interface WorkbenchState {
   exportStarting: boolean;
   batchOpen: boolean;
   batchBusy: boolean;
+  taskOpen: boolean;
+  focusSeq: number;
+  focusTarget: string | null;
   audioAddOpen: boolean;
   audioExportOpen: boolean;
   audioExportJob: AudioExportJob | null;
@@ -174,6 +187,8 @@ interface WorkbenchState {
   dragOrigin: Record<string, XYPosition>;
 
   load: (projectId: string) => Promise<void>;
+  resync: () => Promise<void>;
+  cancelJobs: () => Promise<void>;
   setTheme: (theme: Theme) => void;
   onNodesChange: (changes: NodeChange<Node<WorkbenchNodeData>>[]) => void;
   onEdgesChange: (changes: EdgeChange[]) => void;
@@ -187,6 +202,9 @@ interface WorkbenchState {
   setSettingsOpen: (open: boolean) => void;
   setExportOpen: (open: boolean) => void;
   setBatchOpen: (open: boolean) => void;
+  setTaskOpen: (open: boolean) => void;
+  focusNode: (nodeId: string) => void;
+  cancelTask: (nodeId: string) => Promise<void>;
   setAudioAddOpen: (open: boolean) => void;
   setAudioExportOpen: (open: boolean) => void;
   clearSelection: () => void;
@@ -203,9 +221,9 @@ interface WorkbenchState {
     apiKey?: string;
     promptLang?: 'en' | 'zh';
     concurrency?: number;
-    dailyCap?: number;
     maxBatch?: number;
     audioBaseUrl?: string;
+    audioInferMode?: AudioInferMode;
   }) => Promise<boolean>;
   applyConfig: (config: WorkbenchConfig) => void;
   setLightbox: (value: { nodeId: string; index: number } | null) => void;
@@ -224,7 +242,8 @@ interface WorkbenchState {
   createAudioNodes: (texts: string[]) => Promise<number>;
   splitAudioText: (text: string, chunkChars: number) => Promise<AudioSplitResponse | null>;
   patchAudioNode: (nodeId: string, text: string) => Promise<boolean>;
-  moveAudioNode: (nodeId: string, direction: 'up' | 'down') => Promise<void>;
+  connectAudio: (source: string, target: string) => Promise<void>;
+  removeAudioLink: (edgeId: string) => Promise<void>;
   deleteAudioNode: (nodeId: string) => Promise<void>;
   generateAudio: (nodeId: string, force?: boolean) => Promise<void>;
   batchAudio: (nodeIds: string[], force?: boolean) => Promise<void>;
@@ -263,6 +282,9 @@ export const useWorkbench = create<WorkbenchState>((set, get) => ({
   exportStarting: false,
   batchOpen: false,
   batchBusy: false,
+  taskOpen: false,
+  focusSeq: 0,
+  focusTarget: null,
   audioAddOpen: false,
   audioExportOpen: false,
   audioExportJob: null,
@@ -302,6 +324,7 @@ export const useWorkbench = create<WorkbenchState>((set, get) => ({
       exportMissing: [],
       exportError: null,
       batchOpen: false,
+      taskOpen: false,
       audioAddOpen: false,
       audioExportOpen: false,
       audioExportJob: null,
@@ -325,6 +348,47 @@ export const useWorkbench = create<WorkbenchState>((set, get) => ({
       const message = (error as Error).message;
       set({ ready: true, notFound: message.includes('项目不存在') });
       if (!message.includes('项目不存在')) get().notify(`加载失败：${message}`, 'error');
+    }
+  },
+
+  resync: async () => {
+    const { projectId, nodes } = get();
+    if (!projectId) return;
+    try {
+      const [project, exports, audioExports] = await Promise.all([
+        api<Project>(`/api/projects/${projectId}/project`),
+        api<ExportList>(`/api/projects/${projectId}/exports`).catch(() => null),
+        api<AudioExportList>(`/api/projects/${projectId}/audio/exports`).catch(() => null),
+      ]);
+      const positions = new Map(nodes.map((node) => [node.id, node.position]));
+      set({
+        project,
+        nodes: project.nodes.map((node) => ({
+          ...toFlowNode(node),
+          position: positions.get(node.id) || node.position,
+        })),
+        edges: project.edges.map(toFlowEdge),
+        ...(exports
+          ? { exportHistory: exports.jobs, exportJob: exports.active || get().exportJob }
+          : null),
+        ...(audioExports
+          ? {
+              audioExportHistory: audioExports.jobs,
+              audioExportJob: audioExports.active || get().audioExportJob,
+            }
+          : null),
+      });
+    } catch {
+      // 重连同步失败时保持现有画面，后续事件仍会持续更新
+    }
+  },
+
+  cancelJobs: async () => {
+    try {
+      await api(`${projectBase(get())}/jobs/cancel`, { method: 'POST' });
+      get().notify('已请求停止生成', 'success');
+    } catch (error) {
+      get().notify(`停止失败：${(error as Error).message}`, 'error');
     }
   },
 
@@ -411,6 +475,24 @@ export const useWorkbench = create<WorkbenchState>((set, get) => ({
   },
 
   setBatchOpen: (open) => set({ batchOpen: open }),
+
+  setTaskOpen: (open) => set({ taskOpen: open }),
+
+  focusNode: (nodeId) =>
+    set({
+      selectedId: nodeId,
+      taskOpen: false,
+      focusTarget: nodeId,
+      focusSeq: get().focusSeq + 1,
+    }),
+
+  cancelTask: async (nodeId) => {
+    try {
+      await api(`${projectBase(get())}/jobs/${nodeId}/cancel`, { method: 'POST' });
+    } catch (error) {
+      get().notify(`取消失败：${(error as Error).message}`, 'error');
+    }
+  },
 
   setAudioAddOpen: (open) => set({ audioAddOpen: open }),
 
@@ -673,10 +755,11 @@ export const useWorkbench = create<WorkbenchState>((set, get) => ({
       const res = await api<{ usage: number }>(`${projectBase(get())}/usage/reset`, {
         method: 'POST',
       });
-      const project = get().project;
-      if (project) {
-        set({ project: { ...project, config: { ...project.config, usage: res.usage } } });
-      }
+      const { project, settings } = get();
+      set({
+        project: project ? { ...project, config: { ...project.config, usage: res.usage } } : project,
+        settings: settings ? { ...settings, usage: res.usage } : settings,
+      });
       get().notify('今日用量已重置', 'success');
     } catch (error) {
       get().notify(`重置失败：${(error as Error).message}`, 'error');
@@ -685,11 +768,17 @@ export const useWorkbench = create<WorkbenchState>((set, get) => ({
 
   createAudioNode: async (text) => {
     try {
-      const res = await api<{ node: ProjectNode }>(`${projectBase(get())}/audio/nodes`, {
+      const res = await api<{
+        node: ProjectNode;
+        edges?: { id: string; source: string; target: string; kind?: string }[];
+      }>(`${projectBase(get())}/audio/nodes`, {
         method: 'POST',
         body: JSON.stringify({ text }),
       });
-      set({ nodes: [...get().nodes, toFlowNode(res.node)] });
+      set({
+        nodes: [...get().nodes, toFlowNode(res.node)],
+        edges: [...get().edges, ...(res.edges || []).map(toFlowEdge)],
+      });
       return res.node;
     } catch (error) {
       get().notify(`新建音频失败：${(error as Error).message}`, 'error');
@@ -699,11 +788,17 @@ export const useWorkbench = create<WorkbenchState>((set, get) => ({
 
   createAudioNodes: async (texts) => {
     try {
-      const res = await api<{ nodes: ProjectNode[] }>(`${projectBase(get())}/audio/nodes/batch`, {
+      const res = await api<{
+        nodes: ProjectNode[];
+        edges?: { id: string; source: string; target: string; kind?: string }[];
+      }>(`${projectBase(get())}/audio/nodes/batch`, {
         method: 'POST',
         body: JSON.stringify({ texts }),
       });
-      set({ nodes: [...get().nodes, ...res.nodes.map(toFlowNode)] });
+      set({
+        nodes: [...get().nodes, ...res.nodes.map(toFlowNode)],
+        edges: [...get().edges, ...(res.edges || []).map(toFlowEdge)],
+      });
       return res.nodes.length;
     } catch (error) {
       get().notify(`导入文本失败：${(error as Error).message}`, 'error');
@@ -738,15 +833,61 @@ export const useWorkbench = create<WorkbenchState>((set, get) => ({
     }
   },
 
-  moveAudioNode: async (nodeId, direction) => {
+  connectAudio: async (source, target) => {
+    const { nodes, edges, projectId } = get();
+    if (!projectId || source === target) return;
+    const typeOf = (id: string) => nodes.find((node) => node.id === id)?.type;
+    if (typeOf(source) !== 'audio' || typeOf(target) !== 'audio') return;
+    const links = edges
+      .filter(
+        (edge) =>
+          (edge.data as { kind?: string } | undefined)?.kind === 'audio' &&
+          edge.source !== source &&
+          edge.target !== target,
+      )
+      .map((edge) => ({ source: edge.source, target: edge.target }));
+    links.push({ source, target });
     try {
-      const res = await api<{ nodes: { id: string; data: { no: number } }[] }>(
-        `${projectBase(get())}/audio/nodes/${nodeId}/move`,
-        { method: 'POST', body: JSON.stringify({ direction }) },
-      );
-      set({ nodes: withAudioNos(get().nodes, res.nodes) });
+      const res = await api<{
+        edges: { id: string; source: string; target: string; kind?: string }[];
+        nodes: { id: string; data: { no: number } }[];
+      }>(`${projectBase(get())}/audio/links`, {
+        method: 'PUT',
+        body: JSON.stringify({ links }),
+      });
+      set({
+        edges: res.edges.map(toFlowEdge),
+        nodes: withAudioNos(get().nodes, res.nodes || []),
+      });
     } catch (error) {
-      get().notify(`调整顺序失败：${(error as Error).message}`, 'error');
+      get().notify(`拼接顺序调整失败：${(error as Error).message}`, 'error');
+    }
+  },
+
+  removeAudioLink: async (edgeId) => {
+    const { edges, projectId } = get();
+    if (!projectId) return;
+    const links = edges
+      .filter(
+        (edge) =>
+          edge.id !== edgeId && (edge.data as { kind?: string } | undefined)?.kind === 'audio',
+      )
+      .map((edge) => ({ source: edge.source, target: edge.target }));
+    try {
+      const res = await api<{
+        edges: { id: string; source: string; target: string; kind?: string }[];
+        nodes: { id: string; data: { no: number } }[];
+      }>(`${projectBase(get())}/audio/links`, {
+        method: 'PUT',
+        body: JSON.stringify({ links }),
+      });
+      set({
+        edges: res.edges.map(toFlowEdge),
+        nodes: withAudioNos(get().nodes, res.nodes || []),
+      });
+      get().notify('已取消连线', 'success');
+    } catch (error) {
+      get().notify(`取消连线失败：${(error as Error).message}`, 'error');
     }
   },
 
@@ -759,6 +900,7 @@ export const useWorkbench = create<WorkbenchState>((set, get) => ({
       const remaining = get().nodes.filter((node) => node.id !== nodeId);
       set({
         nodes: withAudioNos(remaining, res.nodes || []),
+        edges: get().edges.filter((edge) => edge.source !== nodeId && edge.target !== nodeId),
         selectedId: get().selectedId === nodeId ? null : get().selectedId,
       });
       get().notify('音频节点已删除', 'success');
@@ -796,7 +938,7 @@ export const useWorkbench = create<WorkbenchState>((set, get) => ({
         return;
       }
       get().notify(
-        `没有可生成的音频${res.skipped ? `，${res.skipped} 个已跳过` : ''}。需要重跑请勾选强制重跑`,
+        `没有可加入队列的音频${res.skipped ? `（${res.skipped} 个已在队列中或文本为空）` : ''}`,
       );
     } catch (error) {
       get().notify(`批量配音失败：${(error as Error).message}`, 'error');

@@ -6,6 +6,7 @@ import { createJobs } from './jobs.mjs';
 import { createExports } from './exports.mjs';
 import { createAudioJobs } from './audio-jobs.mjs';
 import { createAudioExports } from './audio-exports.mjs';
+import { ensureAudioLinks } from './audio.mjs';
 
 export const ID_PATTERN = /^p-[a-z0-9]{1,32}-[a-f0-9]{6}$/;
 const NAME_MAX = 80;
@@ -19,11 +20,6 @@ function newId() {
 function normalizeName(value) {
   const name = String(value ?? '').trim().slice(0, NAME_MAX);
   return name || DEFAULT_NAME;
-}
-
-function todayKey(date = new Date()) {
-  const p = (n) => String(n).padStart(2, '0');
-  return `${date.getFullYear()}-${p(date.getMonth() + 1)}-${p(date.getDate())}`;
 }
 
 function readJson(file, fallback) {
@@ -110,12 +106,13 @@ function summarize(id, dir, project) {
 }
 
 export class ProjectManager {
-  constructor({ dataDir, config, getProvider, getAudioProvider, getVoice, broadcast }) {
+  constructor({ dataDir, config, getProvider, getAudioProvider, getVoice, broadcast, usage }) {
     this.dataDir = dataDir;
     this.projectsDir = path.join(dataDir, 'projects');
     this.trashDir = path.join(dataDir, '.trash');
     this.backupDir = path.join(dataDir, '.backup');
     this.config = config;
+    this.usage = usage;
     this.getProvider = getProvider;
     this.getAudioProvider = getAudioProvider;
     this.getVoice = getVoice;
@@ -197,6 +194,7 @@ export class ProjectManager {
     if (!fs.existsSync(path.join(dir, 'project.json'))) return null;
 
     const store = new Store(dir);
+    ensureAudioLinks(store);
     const assetBase = `/assets/${id}`;
     const runtime = {
       id,
@@ -210,6 +208,7 @@ export class ProjectManager {
         broadcast: this.broadcast,
         projectId: id,
         assetBase,
+        usage: this.usage,
       }),
       exports: createExports({
         store,
@@ -263,7 +262,6 @@ export class ProjectManager {
       },
       nodes: [],
       edges: [],
-      usage: { date: todayKey(), count: 0 },
     };
     writeJson(path.join(dir, 'project.json'), project);
     return this.summary(id);

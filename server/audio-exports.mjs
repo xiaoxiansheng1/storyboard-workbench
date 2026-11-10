@@ -3,6 +3,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { probeAudio } from './video.mjs';
+import { orderedAudioNodes } from './audio.mjs';
 
 const HISTORY_LIMIT = 20;
 const SILENCE_NOISE = '-45dB';
@@ -242,9 +243,7 @@ export function createAudioExports({
   }
 
   function collect(options) {
-    const nodes = store.data.nodes
-      .filter((node) => node.type === 'audio')
-      .sort((a, b) => Number(a.data.no) - Number(b.data.no) || Number(a.position?.x) - Number(b.position?.x));
+    const nodes = orderedAudioNodes(store.data.nodes, store.data.edges);
     const requested = options.nodeIds.length ? new Set(options.nodeIds) : null;
     const pool = requested ? nodes.filter((node) => requested.has(node.id)) : nodes;
     if (!pool.length) {

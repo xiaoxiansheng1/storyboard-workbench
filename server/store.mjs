@@ -3,11 +3,6 @@ import path from 'node:path';
 import { emptyRun } from './hash.mjs';
 import { normalizeAudioData } from './audio.mjs';
 
-function todayKey(date = new Date()) {
-  const p = (n) => String(n).padStart(2, '0');
-  return `${date.getFullYear()}-${p(date.getMonth() + 1)}-${p(date.getDate())}`;
-}
-
 function blank() {
   return {
     version: 1,
@@ -20,7 +15,6 @@ function blank() {
     },
     nodes: [],
     edges: [],
-    usage: { date: todayKey(), count: 0 },
   };
 }
 
@@ -28,7 +22,8 @@ function normalize(data) {
   const base = blank();
   const merged = { ...base, ...data };
   merged.meta = { ...base.meta, ...(data.meta || {}) };
-  merged.usage = { ...base.usage, ...(data.usage || {}) };
+  // 旧版本按项目记录用量，现在统一由 data/usage.json 管理
+  delete merged.usage;
   merged.nodes = Array.isArray(data.nodes) ? data.nodes : [];
   merged.edges = Array.isArray(data.edges) ? data.edges : [];
   for (const node of merged.nodes) {
@@ -131,27 +126,6 @@ export class Store {
       clearTimeout(this.#timer);
       this.#timer = null;
     }
-  }
-
-  usageCount() {
-    const today = todayKey();
-    if (this.data.usage.date !== today) {
-      this.data.usage = { date: today, count: 0 };
-      this.save();
-    }
-    return this.data.usage.count;
-  }
-
-  bumpUsage(n = 1) {
-    this.usageCount();
-    this.data.usage.count += n;
-    this.save();
-  }
-
-  resetUsage() {
-    this.data.usage = { date: todayKey(), count: 0 };
-    this.save();
-    return 0;
   }
 
   node(id) {

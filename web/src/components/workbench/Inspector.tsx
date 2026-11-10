@@ -5,6 +5,12 @@ import type { ShotData } from '../../types';
 import { ChevronRight, Copy, Download, Film, Image as ImageIcon, Trash2, Upload, X } from 'lucide-react';
 import { Button } from '../common/Button';
 import { Segmented } from '../common/Segmented';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '../ui/collapsible';
+import { Textarea } from '../ui/textarea';
 
 interface FormState {
   caption: string;
@@ -54,6 +60,7 @@ export function ShotInspector({ node }: { node: Node<ShotData> }) {
     negativeEn: '',
   });
   const [tab, setTab] = useState<'en' | 'zh'>('zh');
+  const [negTab, setNegTab] = useState<'en' | 'zh'>('zh');
   const [submitting, setSubmitting] = useState(false);
   const [mediaTab, setMediaTab] = useState<'image' | 'video'>('image');
   const busy = node ? node.data.run.status === 'queued' || node.data.run.status === 'running' : false;
@@ -63,6 +70,7 @@ export function ShotInspector({ node }: { node: Node<ShotData> }) {
     if (!node) return;
     setForm(fields(node.data));
     setTab(config?.promptLang === 'en' ? 'en' : 'zh');
+    setNegTab(config?.promptLang === 'en' ? 'en' : 'zh');
     // 只在切换镜头时重置编辑器，避免 SSE 更新覆盖正在输入的内容
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [node?.id]);
@@ -101,7 +109,7 @@ export function ShotInspector({ node }: { node: Node<ShotData> }) {
 
   const promptValue = tab === 'en' ? form.promptEn : form.promptZh;
   const negativeValue = tab === 'en' ? form.negativeEn : form.negativeZh;
-  const inUse = config?.promptLang === tab;
+  const negativeEditValue = negTab === 'en' ? form.negativeEn : form.negativeZh;
   const working = busy || submitting;
   const showVideo = mediaTab === 'video' && Boolean(video);
 
@@ -178,17 +186,16 @@ export function ShotInspector({ node }: { node: Node<ShotData> }) {
       <header className="inspector-head">
         <div className="inspector-head-main">
           <span className="inspector-no">{String(data.no).padStart(2, '0')}</span>
-          <div className="inspector-meta">
-            <div className="inspector-title-row">
-              <span className={`anchor-tag ${data.anchor === 'B' ? 'b' : 'a'}`}>
-                {data.anchor} {data.anchor === 'B' ? '空镜' : '人物'}
-              </span>
-              <span className="inspector-dur">{data.duration.toFixed(2)}s</span>
-            </div>
-            <div className="inspector-tc">
-              {data.srtStart} → {data.srtEnd}
-            </div>
-          </div>
+          <span className={`anchor-tag ${data.anchor === 'B' ? 'b' : 'a'}`}>
+            {data.anchor} {data.anchor === 'B' ? '空镜' : '人物'}
+          </span>
+          <span className="inspector-dur">{data.duration.toFixed(2)}s</span>
+          <span
+            className="inspector-inline"
+            title={`${data.srtStart} → ${data.srtEnd}`}
+          >
+            {data.srtStart} → {data.srtEnd}
+          </span>
         </div>
         <Button variant="icon" type="button" onClick={() => selectNode(null)} title="关闭">
           <X size={15} />
@@ -382,49 +389,39 @@ export function ShotInspector({ node }: { node: Node<ShotData> }) {
         <section className="panel prompt-panel">
           <div className="panel-head">
             <span className="eyebrow">首帧提示词</span>
-            <Button
-              type="button"
-              className="copy-mini"
-              onClick={copyPrompt}
-              title="复制提示词"
-              aria-label="复制提示词"
-            >
-              <Copy size={14} />
-            </Button>
+            <div className="prompt-tools">
+              <Segmented
+                compact
+                label="提示词语言"
+                options={LANG_OPTIONS}
+                value={tab}
+                onChange={(value) => setTab(value)}
+              />
+              <Button
+                type="button"
+                className="copy-mini"
+                onClick={copyPrompt}
+                title="复制提示词"
+                aria-label="复制提示词"
+              >
+                <Copy size={14} />
+              </Button>
+            </div>
           </div>
-          <div className="prompt-lang">
-            <Segmented
-              block
-              label="提示词语言"
-              options={LANG_OPTIONS}
-              value={tab}
-              onChange={(value) => setTab(value)}
-            />
-          </div>
-          <textarea
+          <Textarea
             className="prompt-area"
-            rows={7}
+            rows={6}
             spellCheck={false}
             value={promptValue}
             onChange={setField(tab === 'en' ? 'promptEn' : 'promptZh')}
           />
-          <div className="panel-foot">
-            {inUse ? (
-              <span className="in-use">当前送模型</span>
-            ) : (
-              <span className="foot-warn">
-                生成时发送{config?.promptLang === 'en' ? ' English ' : '中文'}
-                提示词，当前查看的版本不会送模型
-              </span>
-            )}
-          </div>
         </section>
 
         <section className="panel">
           <div className="panel-head">
             <span className="eyebrow">分镜文案</span>
           </div>
-          <textarea
+          <Textarea
             className="caption-area"
             rows={2}
             value={form.caption}
@@ -432,46 +429,50 @@ export function ShotInspector({ node }: { node: Node<ShotData> }) {
           />
         </section>
 
-        <details className="panel collapsible">
-          <summary>
-            <span className="eyebrow">负面词</span>
-            <span className="chev">
-              <ChevronRight size={14} />
-            </span>
-          </summary>
-          <div className="collapsible-body">
-            <label className="mini-field">
-              <span>English</span>
-              <textarea
-                rows={3}
-                value={form.negativeEn}
-                onChange={setField('negativeEn')}
-                spellCheck={false}
+        <Collapsible className="panel collapsible">
+          <div className="collapsible-head">
+            <CollapsibleTrigger className="collapsible-trigger">
+              <span className="eyebrow">负面词</span>
+              <span className="chev">
+                <ChevronRight size={14} />
+              </span>
+            </CollapsibleTrigger>
+            <div className="collapsible-tools">
+              <Segmented
+                compact
+                label="负面词语言"
+                options={LANG_OPTIONS}
+                value={negTab}
+                onChange={(value) => setNegTab(value)}
               />
-            </label>
-            <label className="mini-field">
-              <span>中文</span>
-              <textarea
-                rows={3}
-                value={form.negativeZh}
-                onChange={setField('negativeZh')}
-                spellCheck={false}
-              />
-            </label>
+            </div>
           </div>
-        </details>
+          <CollapsibleContent className="collapsible-content">
+            <div className="collapsible-body">
+              <Textarea
+                className="neg-area"
+                rows={4}
+                value={negativeEditValue}
+                onChange={setField(negTab === 'en' ? 'negativeEn' : 'negativeZh')}
+                spellCheck={false}
+              />
+            </div>
+          </CollapsibleContent>
+        </Collapsible>
 
-        <details className="panel collapsible">
-          <summary>
+        <Collapsible className="panel collapsible">
+          <CollapsibleTrigger className="collapsible-trigger">
             <span className="eyebrow">视频提示词</span>
             <span className="chev">
               <ChevronRight size={14} />
             </span>
-          </summary>
-          <div className="collapsible-body">
-            <pre className="video-prompt">{data.videoPrompt || '（无）'}</pre>
-          </div>
-        </details>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="collapsible-content">
+            <div className="collapsible-body">
+              <pre className="video-prompt">{data.videoPrompt || '（无）'}</pre>
+            </div>
+          </CollapsibleContent>
+        </Collapsible>
       </div>
 
       <footer className="inspector-foot">
