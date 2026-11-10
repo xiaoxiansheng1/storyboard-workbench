@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState, type PointerEvent } from 'react';
-import type { Node } from '@xyflow/react';
 import { useWorkbench } from '../../store';
 import type { AudioData } from '../../types';
 import {
@@ -25,7 +24,7 @@ import { clock, pad } from '../../utils/format';
 
 const BAR_COUNT = 52;
 
-export function AudioInspector({ node }: { node: Node<AudioData> }) {
+export function AudioInspector({ node }: { node: { id: string; data: AudioData } }) {
   const data = node.data;
   const run = data.run;
   const config = useWorkbench((s) => s.project?.config);

@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState, type ChangeEvent } from 'react';
-import type { Node } from '@xyflow/react';
 import { useWorkbench } from '../../store';
 import type { ShotData } from '../../types';
 import { ChevronRight, Copy, Download, Film, Image as ImageIcon, Trash2, Upload, X } from 'lucide-react';
@@ -36,7 +35,7 @@ function fields(data: ShotData): FormState {
   };
 }
 
-export function ShotInspector({ node }: { node: Node<ShotData> }) {
+export function ShotInspector({ node }: { node: { id: string; data: ShotData } }) {
   const config = useWorkbench((s) => s.project?.config);
   const patchNode = useWorkbench((s) => s.patchNode);
   const generate = useWorkbench((s) => s.generate);

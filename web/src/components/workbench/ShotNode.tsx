@@ -1,9 +1,10 @@
+import { memo } from 'react';
 import { Handle, Position, type Node, type NodeProps } from '@xyflow/react';
 import type { ShotData } from '../../types';
 import { Film, Image as ImageIcon } from 'lucide-react';
 import { pad, shortTimecode } from '../../utils/format';
 
-export function ShotNode({ data, selected }: NodeProps<Node<ShotData>>) {
+function ShotNodeView({ data, selected }: NodeProps<Node<ShotData>>) {
   const run = data.run;
   const busy = run.status === 'queued' || run.status === 'running';
   const stale = !busy && run.candidates.some((candidate) => candidate.promptHash !== data.promptHash);
@@ -149,3 +150,9 @@ export function ShotNode({ data, selected }: NodeProps<Node<ShotData>>) {
     </div>
   );
 }
+
+// React Flow v12 每帧把新位置作为 props 传入；比较器忽略位置类 props，拖动时不再重渲染节点内容
+export const ShotNode = memo(
+  ShotNodeView,
+  (a, b) => a.data === b.data && a.selected === b.selected,
+);

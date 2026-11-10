@@ -545,6 +545,23 @@ projectRouter.post('/import', (req, res) => {
   }
 });
 
+// 批量保存节点位置（多选拖动一次提交）；须注册在 /nodes/:id 之前
+projectRouter.patch('/nodes/positions', (req, res) => {
+  const { store } = req.project;
+  const moves = Array.isArray(req.body?.moves) ? req.body.moves : [];
+  let updated = 0;
+  for (const move of moves) {
+    const node = store.node(move?.id);
+    const x = Number(move?.position?.x);
+    const y = Number(move?.position?.y);
+    if (!node || !Number.isFinite(x) || !Number.isFinite(y)) continue;
+    node.position = { x, y };
+    updated += 1;
+  }
+  if (updated) store.save();
+  res.json({ updated });
+});
+
 projectRouter.patch('/nodes/:id', (req, res) => {
   const { store } = req.project;
   const node = store.node(req.params.id);

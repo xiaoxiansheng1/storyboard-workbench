@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type PointerEvent } from 'react';
+import { memo, useEffect, useRef, useState, type PointerEvent } from 'react';
 import type { Node, NodeProps } from '@xyflow/react';
 import { Handle, Position } from '@xyflow/react';
 import { AudioLines, Pause, Play } from 'lucide-react';
@@ -9,7 +9,7 @@ import { clock, pad } from '../../utils/format';
 
 const BAR_COUNT = 36;
 
-export function AudioNode({ id, data, selected }: NodeProps<Node<AudioData>>) {
+function AudioNodeView({ id, data, selected }: NodeProps<Node<AudioData>>) {
   const projectId = useWorkbench((s) => s.projectId);
   const edges = useWorkbench((s) => s.edges);
   const hasIncoming = edges.some(
@@ -176,3 +176,9 @@ export function AudioNode({ id, data, selected }: NodeProps<Node<AudioData>>) {
     </div>
   );
 }
+
+// 忽略位置类 props，拖动多选时不重渲染波形与播放器
+export const AudioNode = memo(
+  AudioNodeView,
+  (a, b) => a.data === b.data && a.selected === b.selected,
+);

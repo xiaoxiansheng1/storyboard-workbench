@@ -1,5 +1,6 @@
-import { useMemo } from 'react';
+import { memo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useShallow } from 'zustand/react/shallow';
 import {
   ChevronDown,
   FileSpreadsheet,
@@ -18,10 +19,9 @@ import {
   DropdownMenuTrigger,
 } from '../ui/dropdown-menu';
 
-export function Toolbar() {
+export const Toolbar = memo(function Toolbar() {
   const navigate = useNavigate();
   const project = useWorkbench((s) => s.project);
-  const nodes = useWorkbench((s) => s.nodes);
   const theme = useWorkbench((s) => s.theme);
   const setTheme = useWorkbench((s) => s.setTheme);
   const setImportOpen = useWorkbench((s) => s.setImportOpen);
@@ -32,22 +32,25 @@ export function Toolbar() {
   const exportJob = useWorkbench((s) => s.exportJob);
   const audioExportJob = useWorkbench((s) => s.audioExportJob);
 
-  const stats = useMemo(() => {
-    let shots = 0;
-    let generated = 0;
-    let audio = 0;
-    let voiced = 0;
-    for (const node of nodes) {
-      if (node.type === 'audio') {
-        audio += 1;
-        if (node.data.run.candidates.length) voiced += 1;
-        continue;
+  // 拖动只改位置不改数据，浅比较让统计稳定，工具栏不随拖动每帧重渲染
+  const stats = useWorkbench(
+    useShallow((s) => {
+      let shots = 0;
+      let generated = 0;
+      let audio = 0;
+      let voiced = 0;
+      for (const node of s.nodes) {
+        if (node.type === 'audio') {
+          audio += 1;
+          if (node.data.run.candidates.length) voiced += 1;
+          continue;
+        }
+        shots += 1;
+        if (node.data.run.candidates.length) generated += 1;
       }
-      shots += 1;
-      if (node.data.run.candidates.length) generated += 1;
-    }
-    return { shots, generated, audio, voiced };
-  }, [nodes]);
+      return { shots, generated, audio, voiced };
+    }),
+  );
 
   const exporting = exportJob?.status === 'queued' || exportJob?.status === 'running';
   const audioExporting =
@@ -153,4 +156,4 @@ export function Toolbar() {
       </div>
     </header>
   );
-}
+});

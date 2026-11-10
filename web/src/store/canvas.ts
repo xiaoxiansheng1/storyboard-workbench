@@ -15,7 +15,7 @@ export interface CanvasSlice {
 
   onNodesChange: (changes: NodeChange<Node<WorkbenchNodeData>>[]) => void;
   onEdgesChange: (changes: EdgeChange[]) => void;
-  persistPosition: (id: string) => Promise<void>;
+  persistPositions: (ids: string[]) => Promise<void>;
   beginPositionDrag: (ids: string[]) => void;
   commitPositionDrag: () => void;
   undoPositions: () => void;
@@ -40,13 +40,18 @@ export const createCanvasSlice: SliceCreator<CanvasSlice> = (set, get) => ({
     set({ edges: applyEdgeChanges(changes, get().edges) });
   },
 
-  persistPosition: async (id) => {
-    const node = get().nodes.find((n) => n.id === id);
-    if (!node) return;
+  persistPositions: async (ids) => {
+    const nodes = get().nodes;
+    const moves: { id: string; position: XYPosition }[] = [];
+    for (const id of ids) {
+      const node = nodes.find((n) => n.id === id);
+      if (node) moves.push({ id, position: { x: node.position.x, y: node.position.y } });
+    }
+    if (!moves.length) return;
     try {
-      await api(`${projectBase(get())}/nodes/${id}`, {
+      await api(`${projectBase(get())}/nodes/positions`, {
         method: 'PATCH',
-        body: JSON.stringify({ position: node.position }),
+        body: JSON.stringify({ moves }),
       });
     } catch {
       // 位置保存失败不阻塞拖拽，下次拖动会重试
@@ -73,7 +78,7 @@ export const createCanvasSlice: SliceCreator<CanvasSlice> = (set, get) => ({
     set({ dragOrigin: {} });
     if (!changes.length) return;
     set({ undo: [...get().undo, changes].slice(-HISTORY_LIMIT), redo: [] });
-    for (const change of changes) void get().persistPosition(change.id);
+    void get().persistPositions(changes.map((change) => change.id));
   },
 
   undoPositions: () => {
@@ -86,7 +91,7 @@ export const createCanvasSlice: SliceCreator<CanvasSlice> = (set, get) => ({
       undo: undo.slice(0, -1),
       redo: [...redo, step].slice(-HISTORY_LIMIT),
     });
-    for (const change of step) void get().persistPosition(change.id);
+    void get().persistPositions(step.map((change) => change.id));
   },
 
   redoPositions: () => {
@@ -99,7 +104,7 @@ export const createCanvasSlice: SliceCreator<CanvasSlice> = (set, get) => ({
       undo: [...undo, step].slice(-HISTORY_LIMIT),
       redo: redo.slice(0, -1),
     });
-    for (const change of step) void get().persistPosition(change.id);
+    void get().persistPositions(step.map((change) => change.id));
   },
 
   selectNode: (id) => set({ selectedId: id }),
