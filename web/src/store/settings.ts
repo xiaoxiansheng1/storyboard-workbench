@@ -13,6 +13,7 @@ export interface SettingsSlice {
     imageModel?: string;
     apiKey?: string;
     promptLang?: 'en' | 'zh';
+    imageSize?: string;
     concurrency?: number;
     maxBatch?: number;
     audioBaseUrl?: string;

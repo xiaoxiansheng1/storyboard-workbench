@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { spawn } from 'node:child_process';
@@ -102,6 +103,10 @@ export function createExports({
     if (run.canceled) throw new Error('已取消');
   }
 
+  function killChildren(run) {
+    for (const child of run.children) child.kill('SIGKILL');
+  }
+
   function runFfmpeg(run, args, onProgress) {
     return new Promise((resolve, reject) => {
       const child = spawn(
@@ -109,7 +114,7 @@ export function createExports({
         onProgress ? ['-progress', 'pipe:1', '-nostats', ...args] : args,
         { windowsHide: true },
       );
-      run.child = child;
+      run.children.add(child);
       let stderr = '';
       let stdout = '';
       child.stderr.on('data', (chunk) => {
@@ -129,7 +134,7 @@ export function createExports({
         });
       }
       child.on('error', (error) => {
-        run.child = null;
+        run.children.delete(child);
         reject(
           new Error(
             error.code === 'ENOENT'
@@ -139,7 +144,7 @@ export function createExports({
         );
       });
       child.on('close', (code) => {
-        run.child = null;
+        run.children.delete(child);
         if (run.canceled) {
           reject(new Error('已取消'));
           return;
@@ -148,6 +153,67 @@ export function createExports({
         else reject(new Error(stderr.trim().split(/\r?\n/).slice(-4).join(' ') || `ffmpeg 退出码 ${code}`));
       });
     });
+  }
+
+  let encoderChoice; // { ffmpegPath, nvenc }
+
+  // 用与正式渲染完全相同的参数做一次测试编码，驱动或 preset 不支持都会走 CPU 回退
+  function detectNvenc(ffmpegPath) {
+    return new Promise((resolve) => {
+      const child = spawn(
+        ffmpegPath,
+        [
+          '-hide_banner',
+          '-loglevel',
+          'error',
+          '-f',
+          'lavfi',
+          '-i',
+          'color=c=black:s=320x240:d=0.2',
+          '-frames:v',
+          '2',
+          '-c:v',
+          'h264_nvenc',
+          '-preset',
+          'p5',
+          '-rc',
+          'vbr',
+          '-cq',
+          '20',
+          '-b:v',
+          '0',
+          '-f',
+          'null',
+          '-',
+        ],
+        { windowsHide: true },
+      );
+      let settled = false;
+      const finish = (ok) => {
+        if (settled) return;
+        settled = true;
+        resolve(ok);
+      };
+      child.on('error', () => finish(false));
+      child.on('close', (code) => finish(code === 0));
+    });
+  }
+
+  async function pickEncoder(ffmpegPath) {
+    if (encoderChoice?.ffmpegPath === ffmpegPath) {
+      return encoderChoice.nvenc ? 'nvenc' : 'x264';
+    }
+    const nvenc = await detectNvenc(ffmpegPath);
+    encoderChoice = { ffmpegPath, nvenc };
+    console.log(`[export] 视频编码器: ${nvenc ? 'h264_nvenc（硬件）' : 'libx264（CPU）'}`);
+    return nvenc ? 'nvenc' : 'x264';
+  }
+
+  function encoderArgs(encoder, { crf, fast }) {
+    if (encoder === 'nvenc') {
+      return ['-c:v', 'h264_nvenc', '-preset', fast ? 'p1' : 'p5', '-rc', 'vbr', '-cq', crf, '-b:v', '0'];
+    }
+    return ['-c:v', 'libx264', '-preset', fast ? 'ultrafast' : 'veryfast', '-crf', crf];
   }
 
   function collectShots(options) {
@@ -162,10 +228,28 @@ export function createExports({
     const missing = [];
     let stale = 0;
 
-    for (const node of nodes) {
+    // 按 SRT 时间轴铺镜头：每镜持续到下一镜的 SRT 开始（末镜到自己的结束时间，
+    // 首镜从 0 起播），字幕条之间的空隙由上一镜多停留补齐，保证与旁白逐句对齐
+    const timelineDuration = (data, nextData, index) => {
+      const startSec = Number(data.startSec);
+      if (!Number.isFinite(startSec)) return Math.max(0.5, Number(data.duration) || 1);
+      const nextStart = nextData ? Number(nextData.startSec) : NaN;
+      const endSec = Number(data.endSec);
+      const right =
+        Number.isFinite(nextStart) && nextStart >= startSec
+          ? nextStart
+          : Number.isFinite(endSec) && endSec > startSec
+            ? endSec
+            : NaN;
+      if (!Number.isFinite(right)) return Math.max(0.5, Number(data.duration) || 1);
+      return Math.max(0.5, right - (index === 0 ? 0 : startSec));
+    };
+
+    for (let i = 0; i < nodes.length; i += 1) {
+      const node = nodes[i];
       const data = node.data;
       const run = data.run || {};
-      const duration = Math.max(0.5, Number(data.duration) || 1);
+      const duration = timelineDuration(data, nodes[i + 1]?.data, i);
       const video = data.video;
       if (video?.filename) {
         const videoSource = path.join(store.assetsDir, node.id, video.filename);
@@ -230,6 +314,8 @@ export function createExports({
     const transition = options.transition || 'none';
     const transSec = options.transitionSec || 0.3;
     const crossfade = transition === 'crossfade' && shots.length > 1;
+    // 叠化时中间片段会被第二遍重编码，用最快档位渲染；无叠化时片段即成品，保持高兼容档
+    const intermediateFast = crossfade;
     const headHandle = (index) => (crossfade && index > 0 ? transSec / 2 : 0);
     const tailHandle = (index) => (crossfade && index < shots.length - 1 ? transSec / 2 : 0);
     const clipDuration = (index) => shots[index].duration + headHandle(index) + tailHandle(index);
@@ -336,6 +422,8 @@ export function createExports({
       job.progress = 1;
       emit(job);
 
+      const encoder = await pickEncoder(config.ffmpegPath);
+
       let lastProgressAt = 0;
       const report = (seconds, total, start, end) => {
         if (!(total > 0)) return;
@@ -349,28 +437,22 @@ export function createExports({
         emit(job);
       };
 
-      const list = [];
-      const clips = [];
-      for (let i = 0; i < shots.length; i += 1) {
-        ensureAlive(run);
-        const shot = shots[i];
-        const clip = path.join(tmp, `clip-${String(i + 1).padStart(3, '0')}.mp4`);
-        const shotStart = Math.round((i / shots.length) * 90) + 1;
-        const shotEnd = Math.round(((i + 1) / shots.length) * 90);
-        job.stage = `正在渲染 ${i + 1}/${shots.length}`;
-        job.progress = shotStart;
-        emit(job);
+      // 片段文件名与顺序固定，拼接清单可以先行构造
+      const clips = shots.map((_, i) => path.join(tmp, `clip-${String(i + 1).padStart(3, '0')}.mp4`));
+      const list = clips.map((clip) => `file '${concatPath(clip)}'`);
 
-        const common = [
-          '-y',
-          '-hide_banner',
-          '-loglevel',
-          'error',
-        ];
-        let args;
+      const ratios = new Float64Array(shots.length);
+      const renderRatio = () => ratios.reduce((sum, value) => sum + value, 0) / shots.length;
+
+      const runClipTask = async (index) => {
+        ensureAlive(run);
+        const shot = shots[index];
+        const clip = clips[index];
+        const common = ['-y', '-hide_banner', '-loglevel', 'error'];
         let clipSeconds;
+        let args;
         if (shot.kind === 'video') {
-          const built = buildVideoShot(shot, i);
+          const built = buildVideoShot(shot, index);
           clipSeconds = built.duration;
           args = [
             ...common,
@@ -388,24 +470,19 @@ export function createExports({
             String(options.fps),
             '-fps_mode',
             'cfr',
-            '-c:v',
-            'libx264',
-            '-preset',
-            'veryfast',
-            '-crf',
-            crf,
+            ...encoderArgs(encoder, { crf, fast: intermediateFast }),
             '-pix_fmt',
             'yuv420p',
             '-an',
             clip,
           ];
         } else {
-          const duration = clipDuration(i);
+          const duration = clipDuration(index);
           clipSeconds = duration;
           let source = shot.source;
           if (withMotion && /\.png$/i.test(source)) {
             // 运镜时 ffmpeg 会反复解码原图；先转成高质量 JPEG，可让单镜渲染快约一倍
-            const converted = path.join(tmp, `base-${String(i + 1).padStart(3, '0')}.jpg`);
+            const converted = path.join(tmp, `base-${String(index + 1).padStart(3, '0')}.jpg`);
             try {
               await runFfmpeg(run, [
                 ...common,
@@ -434,29 +511,53 @@ export function createExports({
             '-t',
             duration.toFixed(3),
             '-vf',
-            buildImageFilter(duration, i),
+            buildImageFilter(duration, index),
             '-r',
             String(options.fps),
             '-fps_mode',
             'cfr',
-            '-c:v',
-            'libx264',
-            '-preset',
-            'veryfast',
-            '-crf',
-            crf,
+            ...encoderArgs(encoder, { crf, fast: intermediateFast }),
             '-pix_fmt',
             'yuv420p',
             '-an',
             clip,
           ];
         }
-        await runFfmpeg(run, args, (seconds) => report(seconds, clipSeconds, shotStart, shotEnd));
-        clips.push(clip);
-        list.push(`file '${concatPath(clip)}'`);
-        job.progress = Math.round(((i + 1) / shots.length) * 90);
-        emit(job);
-      }
+        await runFfmpeg(run, args, (seconds) => {
+          if (!(clipSeconds > 0)) return;
+          const after = Math.max(0, Math.min(1, seconds / clipSeconds));
+          if (after <= ratios[index]) return;
+          ratios[index] = after;
+          const value = Math.max(job.progress, Math.min(90, 1 + Math.round(renderRatio() * 89)));
+          if (value === job.progress) return;
+          job.progress = value;
+          const now = Date.now();
+          if (now - lastProgressAt < 500) return;
+          lastProgressAt = now;
+          emit(job);
+        });
+      };
+
+      // 片段相互独立，zoompan 与编码都接近单线程，多进程并行能吃满多核
+      const workerCount = Math.max(1, Math.min(4, Math.max(1, os.cpus().length - 2), shots.length));
+      let completed = 0;
+      let nextIndex = 0;
+      const worker = async () => {
+        while (true) {
+          const index = nextIndex;
+          nextIndex += 1;
+          if (index >= shots.length) return;
+          await runClipTask(index);
+          completed += 1;
+          job.stage = `正在渲染 ${completed}/${shots.length}`;
+          emit(job);
+        }
+      };
+      job.stage = `正在渲染 0/${shots.length}`;
+      emit(job);
+      await Promise.all(Array.from({ length: workerCount }, () => worker()));
+      job.progress = 90;
+      emit(job);
 
       ensureAlive(run);
       const filename = `storyboard-${fileTimestamp(new Date(job.createdAt))}-${job.id.slice(-4)}.mp4`;
@@ -495,12 +596,7 @@ export function createExports({
           String(options.fps),
           '-fps_mode',
           'cfr',
-          '-c:v',
-          'libx264',
-          '-preset',
-          'veryfast',
-          '-crf',
-          crf,
+          ...encoderArgs(encoder, { crf, fast: false }),
           '-pix_fmt',
           'yuv420p',
           '-an',
@@ -544,6 +640,8 @@ export function createExports({
       job.finishedAt = new Date().toISOString();
       finish(run, job);
     } catch (error) {
+      // 并行渲染中某个片段失败时，停掉其余仍在跑的 ffmpeg，避免占用句柄影响临时目录清理
+      killChildren(run);
       job.finishedAt = new Date().toISOString();
       if (disposed) return;
       if (run.canceled) {
@@ -595,7 +693,7 @@ export function createExports({
       createdAt,
       finishedAt: null,
     };
-    const run = { job, shots, canceled: false, child: null, finished: false };
+    const run = { job, shots, canceled: false, children: new Set(), finished: false };
     active = run;
     emit(job);
     void process(run);
@@ -618,7 +716,7 @@ export function createExports({
     active.job.stage = '已取消';
     active.job.finishedAt = new Date().toISOString();
     emit(active.job);
-    if (active.child) active.child.kill('SIGKILL');
+    killChildren(active);
     return active.job;
   }
 
@@ -633,7 +731,7 @@ export function createExports({
 
   function dispose() {
     disposed = true;
-    if (active?.child) active.child.kill('SIGKILL');
+    if (active) killChildren(active);
     active = null;
   }
 

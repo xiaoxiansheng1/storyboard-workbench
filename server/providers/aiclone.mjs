@@ -16,7 +16,7 @@ export const AICLONE_MODELS = [
   },
 ];
 
-const RATIOS = new Set(['1:1', '16:9', '9:16']);
+const RATIOS = new Set(['1:1', '4:3', '3:4', '16:9', '9:16']);
 
 export function toImageRatio(size) {
   const raw = String(size || '').trim();
@@ -26,7 +26,10 @@ export function toImageRatio(size) {
   const width = Number(matched[1]);
   const height = Number(matched[2]);
   if (!width || !height) return '16:9';
-  if (Math.abs(width / height - 1) < 0.05) return '1:1';
+  const ratio = width / height;
+  if (Math.abs(ratio - 1) < 0.05) return '1:1';
+  if (Math.abs(ratio - 4 / 3) < 0.05) return '4:3';
+  if (Math.abs(ratio - 3 / 4) < 0.05) return '3:4';
   return width > height ? '16:9' : '9:16';
 }
 

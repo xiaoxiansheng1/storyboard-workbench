@@ -8,7 +8,7 @@ import { buildProject } from './import.mjs';
 import { createProvider } from './providers/index.mjs';
 import { createIndexTTSProvider } from './providers/indextts.mjs';
 import { AICLONE_MODELS } from './providers/aiclone.mjs';
-import { Settings, SETTING_LIMITS, AUDIO_INFER_MODES } from './settings.mjs';
+import { Settings, SETTING_LIMITS, AUDIO_INFER_MODES, IMAGE_SIZES, DEFAULT_IMAGE_SIZE } from './settings.mjs';
 import { hashPrompt } from './hash.mjs';
 import { roundTo } from './utils/num.mjs';
 import { saveAsset, pruneAssets } from './assets.mjs';
@@ -38,6 +38,9 @@ if (settings.data.audioBaseUrl) {
 }
 if (AUDIO_INFER_MODES.includes(settings.data.audioInferMode)) {
   config.audio.inferMode = settings.data.audioInferMode;
+}
+if (IMAGE_SIZES.includes(settings.data.imageSize)) {
+  config.imageSize = settings.data.imageSize;
 }
 for (const key of Object.keys(SETTING_LIMITS)) {
   if (Number.isInteger(settings.data[key])) config[key] = settings.data[key];
@@ -157,7 +160,7 @@ function publicConfig() {
     providerLabel: PROVIDER_LABELS[provider.name] || provider.name,
     model: provider.model,
     models: provider.models || [],
-    size: config.openai.size,
+    size: config.imageSize || DEFAULT_IMAGE_SIZE,
     promptLang: config.promptLang,
     appendNegative: config.appendNegative,
     dailyCap: config.dailyCap,
@@ -183,7 +186,7 @@ function settingsPayload() {
     hasKey: Boolean(config.aiclone.apiKey),
     keyHint: maskKey(config.aiclone.apiKey),
     promptLang: config.promptLang,
-    size: config.openai.size,
+    size: config.imageSize || DEFAULT_IMAGE_SIZE,
     dailyCap: config.dailyCap,
     usage: usage.count(),
     concurrency: config.concurrency,
@@ -266,6 +269,13 @@ app.patch('/api/settings', (req, res) => {
   if (body.promptLang === 'zh' || body.promptLang === 'en') {
     patch.promptLang = body.promptLang;
   }
+  if (body.imageSize !== undefined) {
+    if (!IMAGE_SIZES.includes(body.imageSize)) {
+      res.status(400).json({ error: `生图比例仅支持 ${IMAGE_SIZES.join(' / ')}` });
+      return;
+    }
+    patch.imageSize = body.imageSize;
+  }
   if (typeof body.audioBaseUrl === 'string') {
     const value = body.audioBaseUrl.trim().replace(/\/+$/, '');
     if (value && !/^https?:\/\//i.test(value)) {
@@ -299,6 +309,7 @@ app.patch('/api/settings', (req, res) => {
   settings.patch(patch);
   if (patch.apiKey) config.aiclone.apiKey = patch.apiKey;
   if (patch.promptLang) config.promptLang = patch.promptLang;
+  if (patch.imageSize) config.imageSize = patch.imageSize;
   if (patch.audioBaseUrl) config.audio.baseUrl = patch.audioBaseUrl;
   if (patch.audioInferMode) config.audio.inferMode = patch.audioInferMode;
   for (const key of Object.keys(SETTING_LIMITS)) {

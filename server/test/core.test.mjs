@@ -7,6 +7,7 @@ import { buildPrompt } from '../prompt.mjs';
 import { hashPrompt } from '../hash.mjs';
 import { splitAudioText, orderedAudioNodes, ensureAudioLinks } from '../audio.mjs';
 import { toImageRatio } from '../providers/aiclone.mjs';
+import { Settings } from '../settings.mjs';
 import { Usage } from '../usage.mjs';
 
 const shot = {
@@ -43,15 +44,32 @@ test('hashPrompt 对字段变化敏感且长度固定', () => {
   assert.notEqual(hashPrompt({ ...shot, negativeEn: '' }), base);
 });
 
-test('toImageRatio 统一成接口接受的三种比例', () => {
+test('toImageRatio 统一成接口支持的比例', () => {
   assert.equal(toImageRatio('1:1'), '1:1');
+  assert.equal(toImageRatio('4:3'), '4:3');
+  assert.equal(toImageRatio('3:4'), '3:4');
   assert.equal(toImageRatio('16:9'), '16:9');
+  assert.equal(toImageRatio('9:16'), '9:16');
   assert.equal(toImageRatio('1024x1024'), '1:1');
   assert.equal(toImageRatio('1536×1024'), '16:9');
   assert.equal(toImageRatio('720:1280'), '9:16');
-  assert.equal(toImageRatio('1024x768'), '16:9');
+  assert.equal(toImageRatio('1024x768'), '4:3');
+  assert.equal(toImageRatio('768x1024'), '3:4');
   assert.equal(toImageRatio('随便写的'), '16:9');
   assert.equal(toImageRatio(''), '16:9');
+});
+
+test('Settings 保存 imageSize 并按白名单过滤', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-settings-'));
+  try {
+    const settings = new Settings(dir);
+    settings.patch({ imageSize: '3:4' });
+    assert.equal(settings.data.imageSize, '3:4');
+    settings.patch({ imageSize: '5:4' });
+    assert.equal(settings.data.imageSize, '3:4');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test('splitAudioText 清洗字幕、按句子分块并限制单块长度', () => {

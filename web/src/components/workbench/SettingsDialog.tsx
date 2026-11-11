@@ -28,6 +28,14 @@ const LANG_OPTIONS: { value: 'zh' | 'en'; label: string }[] = [
   { value: 'en', label: 'English 提示词' },
 ];
 
+const SIZE_OPTIONS: { value: string; label: string }[] = [
+  { value: '1:1', label: '1:1 方形' },
+  { value: '4:3', label: '4:3 横屏' },
+  { value: '3:4', label: '3:4 竖屏' },
+  { value: '16:9', label: '16:9 横屏' },
+  { value: '9:16', label: '9:16 竖屏' },
+];
+
 const INFER_OPTIONS: { value: AudioInferMode; label: string }[] = [
   { value: '普通推理', label: '普通推理' },
   { value: '批次推理', label: '批次推理' },
@@ -47,6 +55,7 @@ export function SettingsDialog() {
   const [tab, setTab] = useState<SettingsTab>('image');
   const [model, setModel] = useState('');
   const [lang, setLang] = useState<'en' | 'zh'>('zh');
+  const [size, setSize] = useState('16:9');
   const [key, setKey] = useState('');
   const [limits, setLimits] = useState<Record<LimitKey, string>>({
     concurrency: '',
@@ -58,6 +67,7 @@ export function SettingsDialog() {
   const [checking, setChecking] = useState(false);
   const [uploadingVoice, setUploadingVoice] = useState(false);
   const voiceFileRef = useRef<HTMLInputElement>(null);
+  const syncedRef = useRef(false);
 
   const checkAudio = async (url: string) => {
     setChecking(true);
@@ -73,24 +83,30 @@ export function SettingsDialog() {
     }
   };
 
+  // tab 只在打开瞬间重置；替换参考音色等 settings 更新不能把用户拽回生图页
   useEffect(() => {
     if (!open) {
       setKey('');
+      syncedRef.current = false;
       return;
     }
     setTab('image');
-    if (settings) {
-      setModel(settings.imageModel);
-      setLang(settings.promptLang);
-      setLimits({
-        concurrency: String(settings.concurrency),
-        maxBatch: String(settings.maxBatch),
-      });
-      setAudioBaseUrl(settings.audio.baseUrl);
-      setInferMode(settings.audio.inferMode || '普通推理');
-      void checkAudio(settings.audio.baseUrl);
-    }
-    // 只在打开或设置重新读取时同步表单
+  }, [open]);
+
+  // 打开后设置首次到位时同步一次表单；之后的 settings 变化不再打断当前编辑
+  useEffect(() => {
+    if (!open || !settings || syncedRef.current) return;
+    syncedRef.current = true;
+    setModel(settings.imageModel);
+    setLang(settings.promptLang);
+    setSize(settings.size || '16:9');
+    setLimits({
+      concurrency: String(settings.concurrency),
+      maxBatch: String(settings.maxBatch),
+    });
+    setAudioBaseUrl(settings.audio.baseUrl);
+    setInferMode(settings.audio.inferMode || '普通推理');
+    void checkAudio(settings.audio.baseUrl);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, settings]);
 
@@ -149,6 +165,7 @@ export function SettingsDialog() {
       provider: string;
       imageModel: string;
       promptLang: 'en' | 'zh';
+      imageSize: string;
       apiKey?: string;
       concurrency: number;
       maxBatch: number;
@@ -158,6 +175,7 @@ export function SettingsDialog() {
       provider: 'aiclone',
       imageModel: model,
       promptLang: lang,
+      imageSize: size,
       concurrency: parsedLimits.concurrency!,
       maxBatch: parsedLimits.maxBatch!,
       audioBaseUrl: audioBaseUrl.trim(),
@@ -250,6 +268,20 @@ export function SettingsDialog() {
                     </Button>
                   ))}
                 </div>
+              </div>
+
+              <div className="settings-section">
+                <div className="settings-label">生图比例</div>
+                <Segmented
+                  block
+                  label="生图比例"
+                  options={SIZE_OPTIONS}
+                  value={size}
+                  onChange={setSize}
+                />
+                <p className="settings-hint">
+                  切换比例后，已有镜头会标记为配置已变化，重新生成才会使用新比例。
+                </p>
               </div>
 
               <div className="settings-section">

@@ -211,7 +211,7 @@ export function createJobs({
       const seed = job.seed !== undefined ? job.seed + i : undefined;
       const { result, error } = await generateOnce(provider, job, {
         prompt,
-        size: config.openai.size,
+        size: config.imageSize || config.openai.size,
         seed,
         meta: {
           no: data.no,
@@ -236,7 +236,7 @@ export function createJobs({
         url: asset.url,
         filename: asset.filename,
         seed: seed ?? null,
-        size: result.size || config.openai.size,
+        size: result.size || config.imageSize || config.openai.size,
         provider: provider.name,
         model: provider.model,
         promptHash: data.promptHash,

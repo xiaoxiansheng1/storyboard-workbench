@@ -4,7 +4,11 @@ import { readJsonSafe, writeJsonAtomic } from './utils/json-file.mjs';
 
 export const AUDIO_INFER_MODES = ['普通推理', '批次推理'];
 
-const FIELDS = ['provider', 'imageModel', 'apiKey', 'promptLang', 'audioBaseUrl', 'audioInferMode'];
+export const IMAGE_SIZES = ['1:1', '4:3', '3:4', '16:9', '9:16'];
+
+export const DEFAULT_IMAGE_SIZE = '16:9';
+
+const FIELDS = ['provider', 'imageModel', 'apiKey', 'promptLang', 'imageSize', 'audioBaseUrl', 'audioInferMode'];
 
 export const SETTING_LIMITS = {
   concurrency: [1, 8],
@@ -18,6 +22,7 @@ function normalize(raw) {
     if (typeof raw[key] === 'string' && raw[key].trim()) {
       const value = raw[key].trim();
       if (key === 'audioInferMode' && !AUDIO_INFER_MODES.includes(value)) continue;
+      if (key === 'imageSize' && !IMAGE_SIZES.includes(value)) continue;
       data[key] = value;
     }
   }
