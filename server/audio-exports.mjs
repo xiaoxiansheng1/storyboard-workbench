@@ -7,8 +7,8 @@ import { orderedAudioNodes } from './audio.mjs';
 import { roundTo, clampNumber } from './utils/num.mjs';
 import { fileTimestamp } from './utils/time.mjs';
 import { messageOf } from './utils/message.mjs';
+import { createExportRunner } from './export-runner.mjs';
 
-const HISTORY_LIMIT = 20;
 const SILENCE_NOISE = '-45dB';
 const SILENCE_MIN = 0.2;
 const EDGE_PAD = 0.04;
@@ -139,96 +139,28 @@ export function createAudioExports({
   exportDir = path.join(config.dataDir, 'audio-exports'),
   historyFile = path.join(config.dataDir, 'audio-exports.json'),
 }) {
-  fs.mkdirSync(exportDir, { recursive: true });
-
-  let history = loadHistory();
-  let active = null;
-  let disposed = false;
-
-  function emit(job) {
-    if (disposed) return;
-    broadcast({ type: 'audio-export', projectId, job });
-  }
-
-  function loadHistory() {
-    try {
-      const data = JSON.parse(fs.readFileSync(historyFile, 'utf8'));
-      return Array.isArray(data) ? data.slice(0, HISTORY_LIMIT) : [];
-    } catch {
-      return [];
-    }
-  }
-
-  function saveHistory() {
-    if (disposed) return;
-    const tmp = `${historyFile}.tmp`;
-    fs.writeFileSync(tmp, JSON.stringify(history.slice(0, HISTORY_LIMIT), null, 2), 'utf8');
-    fs.renameSync(tmp, historyFile);
-  }
-
-  function finish(run, job) {
-    if (run.finished) return;
-    run.finished = true;
-    job.finishedAt = job.finishedAt || new Date().toISOString();
-    if (active === run) active = null;
-    if (disposed) return;
-    history = [job, ...history.filter((item) => item.id !== job.id)].slice(0, HISTORY_LIMIT);
-    saveHistory();
-    emit(job);
-  }
-
-  function ensureAlive(run) {
-    if (disposed) throw new Error('项目已删除');
-    if (run.canceled) throw new Error('已取消');
-  }
-
-  function runFfmpeg(run, args, onProgress) {
-    return new Promise((resolve, reject) => {
-      const child = spawn(
-        config.ffmpegPath,
-        onProgress ? ['-progress', 'pipe:1', '-nostats', ...args] : args,
-        { windowsHide: true },
-      );
-      run.child = child;
-      let stderr = '';
-      let stdout = '';
-      child.stderr.on('data', (chunk) => {
-        stderr = `${stderr}${chunk.toString()}`.slice(-2000);
-      });
-      if (onProgress) {
-        child.stdout.on('data', (chunk) => {
-          stdout += chunk.toString();
-          let index = stdout.indexOf('\n');
-          while (index >= 0) {
-            const line = stdout.slice(0, index).trim();
-            stdout = stdout.slice(index + 1);
-            const match = /^out_time_us=(\d+)$/.exec(line);
-            if (match) onProgress(Number(match[1]) / 1_000_000);
-            index = stdout.indexOf('\n');
-          }
-        });
-      }
-      child.on('error', (error) => {
-        run.child = null;
-        reject(
-          new Error(
-            error.code === 'ENOENT'
-              ? `未找到 ffmpeg（${config.ffmpegPath}），请安装后重试或设置 FFMPEG_PATH`
-              : error.message,
-          ),
-        );
-      });
-      child.on('close', (code) => {
-        run.child = null;
-        if (run.canceled) {
-          reject(new Error('已取消'));
-          return;
-        }
-        if (code === 0) resolve();
-        else reject(new Error(stderr.trim().split(/\r?\n/).slice(-4).join(' ') || `ffmpeg 退出码 ${code}`));
-      });
-    });
-  }
+  const {
+    emit,
+    finish,
+    ensureAlive,
+    runFfmpeg,
+    isBusy,
+    begin,
+    cancel,
+    list,
+    get,
+    dispose,
+    isDisposed,
+    label,
+  } = createExportRunner({
+    broadcast,
+    projectId,
+    type: 'audio-export',
+    config,
+    exportDir,
+    historyFile,
+    label: '音频合成任务',
+  });
 
   function collect(options) {
     const nodes = orderedAudioNodes(store.data.nodes, store.data.edges);
@@ -292,18 +224,18 @@ export function createAudioExports({
         ],
         { windowsHide: true },
       );
-      run.child = child;
+      run.children.add(child);
       let stderr = '';
       child.stderr.on('data', (chunk) => {
         stderr += chunk.toString();
         if (stderr.length > 400000) stderr = stderr.slice(-200000);
       });
       child.on('error', () => {
-        run.child = null;
+        run.children.delete(child);
         resolve([]);
       });
       child.on('close', () => {
-        run.child = null;
+        run.children.delete(child);
         resolve(run.canceled ? [] : parseSilences(stderr, clip.duration));
       });
     });
@@ -474,7 +406,7 @@ export function createAudioExports({
       finish(run, job);
     } catch (error) {
       job.finishedAt = new Date().toISOString();
-      if (disposed) return;
+      if (isDisposed()) return;
       if (run.canceled) {
         job.status = 'canceled';
         job.stage = '已取消';
@@ -493,8 +425,8 @@ export function createAudioExports({
   }
 
   function start(rawOptions) {
-    if (active) {
-      const error = new Error('已有音频合成任务正在进行');
+    if (isBusy()) {
+      const error = new Error(`已有${label}正在进行`);
       error.status = 409;
       throw error;
     }
@@ -525,44 +457,11 @@ export function createAudioExports({
       createdAt,
       finishedAt: null,
     };
-    const run = { job, clips, canceled: false, child: null, finished: false };
-    active = run;
+    const run = { job, clips, canceled: false, children: new Set(), finished: false };
+    begin(run);
     emit(job);
     void process(run);
     return job;
-  }
-
-  function cancel(id) {
-    if (!active || active.job.id !== id) {
-      const error = new Error('没有正在运行的音频合成任务');
-      error.status = 404;
-      throw error;
-    }
-    if (active.job.status === 'done' || active.job.status === 'error') {
-      const error = new Error('任务已经结束');
-      error.status = 400;
-      throw error;
-    }
-    active.canceled = true;
-    active.child?.kill('SIGKILL');
-    return active.job;
-  }
-
-  function list() {
-    return { active: active ? active.job : null, jobs: history };
-  }
-
-  function get(id) {
-    if (active?.job.id === id) return active.job;
-    return history.find((job) => job.id === id) || null;
-  }
-
-  function dispose() {
-    disposed = true;
-    if (active) {
-      active.canceled = true;
-      active.child?.kill('SIGKILL');
-    }
   }
 
   return { start, cancel, list, get, dispose };

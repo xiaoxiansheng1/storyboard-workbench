@@ -25,7 +25,9 @@ export async function downloadImage(url, timeoutMs, signal) {
     try {
       const timeout = AbortSignal.timeout(timeoutMs);
       const combined =
-        signal && typeof AbortSignal.any === 'function' ? AbortSignal.any([timeout, signal]) : timeout;
+        signal && typeof AbortSignal.any === 'function'
+          ? AbortSignal.any([timeout, signal])
+          : timeout;
       const res = await fetch(absolute, { signal: combined });
       if (!res.ok) {
         const error = new Error(`图片下载失败 HTTP ${res.status}`);

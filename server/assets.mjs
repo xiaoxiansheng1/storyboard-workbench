@@ -31,7 +31,10 @@ const EXT_BY_MIME = {
 };
 
 export function extFromMime(mime, fallback = 'png') {
-  const clean = String(mime || '').split(';')[0].trim().toLowerCase();
+  const clean = String(mime || '')
+    .split(';')[0]
+    .trim()
+    .toLowerCase();
   return EXT_BY_MIME[clean] || fallback;
 }
 
@@ -51,7 +54,13 @@ export function sniffExt(buffer) {
   if (buffer.length > 2 && buffer[0] === 0xff && (buffer[1] & 0xe0) === 0xe0) return 'mp3';
   if (buffer.length > 4 && buffer.toString('ascii', 0, 4) === '<svg') return 'svg';
   if (buffer.length > 12 && buffer.toString('ascii', 4, 8) === 'ftyp') return 'mp4';
-  if (buffer.length > 4 && buffer[0] === 0x1a && buffer[1] === 0x45 && buffer[2] === 0xdf && buffer[3] === 0xa3) {
+  if (
+    buffer.length > 4 &&
+    buffer[0] === 0x1a &&
+    buffer[1] === 0x45 &&
+    buffer[2] === 0xdf &&
+    buffer[3] === 0xa3
+  ) {
     return 'webm';
   }
   return 'png';
@@ -94,4 +103,3 @@ export function pruneAssets(assetsDir, nodeId, keep = []) {
   }
   return removed;
 }
-

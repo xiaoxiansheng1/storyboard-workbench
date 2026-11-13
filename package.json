@@ -10,8 +10,14 @@
     "dev:web": "vite --config web/vite.config.ts",
     "build": "vite build --config web/vite.config.ts",
     "start": "node server/index.mjs",
-    "test": "node --test server/test",
-    "typecheck": "tsc -p web/tsconfig.json --noEmit"
+    "test": "npm run test:server && npm run test:web",
+    "test:server": "node --test server/test",
+    "test:web": "vitest run --config web/vitest.config.ts",
+    "typecheck": "tsc -p web/tsconfig.json --noEmit",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "dependencies": {
     "@radix-ui/react-collapsible": "^1.2.1",
@@ -30,12 +36,20 @@
     "zustand": "^5.0.2"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/node": "^22.10.5",
     "@types/react": "^18.3.18",
     "@types/react-dom": "^18.3.5",
     "@vitejs/plugin-react": "^4.3.4",
+    "eslint": "^10.14.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.7",
+    "globals": "^17.14.0",
+    "prettier": "^3.10.1",
     "typescript": "^5.7.2",
-    "vite": "^6.0.7"
+    "typescript-eslint": "^8.72.2",
+    "vite": "^6.0.7",
+    "vitest": "^3.2.7"
   },
   "engines": {
     "node": ">=20"

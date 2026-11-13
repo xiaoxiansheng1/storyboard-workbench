@@ -89,7 +89,7 @@ export function createIndexTTSProvider(config) {
       signal: timeoutSignal(60000, signal),
     });
     const text = await res.text();
-    let json = null;
+    let json;
     try {
       json = text ? JSON.parse(text) : null;
     } catch {
@@ -216,7 +216,9 @@ export function createIndexTTSProvider(config) {
     const data = Buffer.from(await res.arrayBuffer());
     let mime =
       (typeof file.mime_type === 'string' && file.mime_type) ||
-      String(res.headers.get('content-type') || '').split(';')[0].trim() ||
+      String(res.headers.get('content-type') || '')
+        .split(';')[0]
+        .trim() ||
       '';
     const ext = extFromMime(mime, '') || sniffExt(data);
     if (!mime.toLowerCase().startsWith('audio/')) {
@@ -227,25 +229,30 @@ export function createIndexTTSProvider(config) {
 
   async function once({ text, voice, signal }) {
     const fileData = await uploadReference(voice, signal);
-    const created = await call(`/gradio_api/call/${config.audio.endpoint}`, {
-      data: [
-        fileData,
-        text,
-        config.audio.inferMode || DEFAULTS.inferMode,
-        DEFAULTS.maxTextTokensPerSentence,
-        DEFAULTS.sentencesBucketMaxSize,
-        DEFAULTS.doSample,
-        DEFAULTS.topP,
-        DEFAULTS.topK,
-        DEFAULTS.temperature,
-        DEFAULTS.lengthPenalty,
-        DEFAULTS.numBeams,
-        DEFAULTS.repetitionPenalty,
-        DEFAULTS.maxMelTokens,
-      ],
-    }, signal);
+    const created = await call(
+      `/gradio_api/call/${config.audio.endpoint}`,
+      {
+        data: [
+          fileData,
+          text,
+          config.audio.inferMode || DEFAULTS.inferMode,
+          DEFAULTS.maxTextTokensPerSentence,
+          DEFAULTS.sentencesBucketMaxSize,
+          DEFAULTS.doSample,
+          DEFAULTS.topP,
+          DEFAULTS.topK,
+          DEFAULTS.temperature,
+          DEFAULTS.lengthPenalty,
+          DEFAULTS.numBeams,
+          DEFAULTS.repetitionPenalty,
+          DEFAULTS.maxMelTokens,
+        ],
+      },
+      signal,
+    );
     const eventId = created.event_id || created.eventId;
-    if (!eventId) throw new Error(`接口没有返回 event_id：${JSON.stringify(created).slice(0, 200)}`);
+    if (!eventId)
+      throw new Error(`接口没有返回 event_id：${JSON.stringify(created).slice(0, 200)}`);
     const result = await readEvents(eventId, signal);
     const file = pickFile(result);
     if (!file) throw new Error(`生成结果里没有音频文件：${JSON.stringify(result).slice(0, 200)}`);

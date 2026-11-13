@@ -86,7 +86,12 @@ export function BatchDialog() {
             variant="primary"
             disabled={!canStart}
             aria-busy={busy || undefined}
-            onClick={() => void batchNodes(selected.map((node) => node.id), force)}
+            onClick={() =>
+              void batchNodes(
+                selected.map((node) => node.id),
+                force,
+              )
+            }
           >
             {busy ? '提交中…' : force ? `重新生成 ${planned} 个镜头` : `生成 ${planned} 个镜头`}
           </Button>
@@ -94,51 +99,51 @@ export function BatchDialog() {
       }
     >
       <div className="batch-stats">
-          <div className="batch-stat">
-            <b>{selected.length}</b>
-            <span>已选镜头</span>
-          </div>
-          <div className="batch-stat">
-            <b>{withFrame}</b>
-            <span>已有首帧</span>
-          </div>
-          <div className="batch-stat">
-            <b>{planned}</b>
-            <span>本次生成</span>
-          </div>
+        <div className="batch-stat">
+          <b>{selected.length}</b>
+          <span>已选镜头</span>
         </div>
-
-        <div className="batch-shots">
-          {states.map(({ node, state }) => (
-            <span
-              key={node.id}
-              className={`batch-chip ${state.tone}`}
-              title={`镜头 ${pad(node.data.no)} · ${state.label}`}
-            >
-              {pad(node.data.no)}
-            </span>
-          ))}
+        <div className="batch-stat">
+          <b>{withFrame}</b>
+          <span>已有首帧</span>
         </div>
+        <div className="batch-stat">
+          <b>{planned}</b>
+          <span>本次生成</span>
+        </div>
+      </div>
 
-        <p className="modal-note">
-          默认只生成需要更新的镜头，生成中或排队的会跳过。
-          {running > 0 && <span className="warn"> 其中 {running} 个正在生成。</span>}
+      <div className="batch-shots">
+        {states.map(({ node, state }) => (
+          <span
+            key={node.id}
+            className={`batch-chip ${state.tone}`}
+            title={`镜头 ${pad(node.data.no)} · ${state.label}`}
+          >
+            {pad(node.data.no)}
+          </span>
+        ))}
+      </div>
+
+      <p className="modal-note">
+        默认只生成需要更新的镜头，生成中或排队的会跳过。
+        {running > 0 && <span className="warn"> 其中 {running} 个正在生成。</span>}
+      </p>
+
+      {overBatch && (
+        <p className="batch-warning">
+          单次最多 {maxBatch} 个镜头，请减少选择或在系统设置中调高上限。
         </p>
+      )}
 
-        {overBatch && (
-          <p className="batch-warning">
-            单次最多 {maxBatch} 个镜头，请减少选择或在系统设置中调高上限。
-          </p>
-        )}
-
-        <label className="batch-check">
-          <input
-            type="checkbox"
-            checked={force}
-            onChange={(event) => setForce(event.target.checked)}
-          />
-          <span>已有首帧也重新生成</span>
-        </label>
+      <label className="batch-check">
+        <input
+          type="checkbox"
+          checked={force}
+          onChange={(event) => setForce(event.target.checked)}
+        />
+        <span>已有首帧也重新生成</span>
+      </label>
     </Modal>
   );
 }

@@ -139,15 +139,18 @@
   --y: translateX(0);
 }
 
-[data-sonner-toaster][data-x-position='left'] [data-sonner-toast][data-expanded='false'][data-front='false'] {
+[data-sonner-toaster][data-x-position='left']
+  [data-sonner-toast][data-expanded='false'][data-front='false'] {
   --y: translateY(calc(var(--lift-amount) * var(--toasts-before))) translateX(0)
     scale(calc(-1 * var(--scale)));
 }
 
-[data-sonner-toaster][data-x-position='left'] [data-sonner-toast][data-mounted='true'][data-expanded='true'] {
+[data-sonner-toaster][data-x-position='left']
+  [data-sonner-toast][data-mounted='true'][data-expanded='true'] {
   --y: translateY(calc(var(--lift) * var(--offset))) translateX(0);
 }
 
-[data-sonner-toaster][data-x-position='left'] [data-sonner-toast][data-removed='true'][data-front='true'][data-swipe-out='false'] {
+[data-sonner-toaster][data-x-position='left']
+  [data-sonner-toast][data-removed='true'][data-front='true'][data-swipe-out='false'] {
   --y: translateX(-105%);
-}
+}

@@ -78,7 +78,8 @@ export function TaskCenter() {
             id: node.id,
             kind: 'shot',
             no: Number(data.no) || 0,
-            title: String(data.caption || data.promptZh || data.promptEn || '').trim() || '未命名镜头',
+            title:
+              String(data.caption || data.promptZh || data.promptEn || '').trim() || '未命名镜头',
             status: run.status as Task['status'],
             progress: run.progress,
             error: run.status === 'error' ? run.error : null,
@@ -316,7 +317,12 @@ export function TaskCenter() {
                         <Crosshair size={13} />
                       </Button>
                       {task.status === 'error' ? (
-                        <Button type="button" variant="icon" title="重试" onClick={() => retry(task)}>
+                        <Button
+                          type="button"
+                          variant="icon"
+                          title="重试"
+                          onClick={() => retry(task)}
+                        >
                           <RotateCcw size={13} />
                         </Button>
                       ) : (

@@ -15,7 +15,9 @@ const DEFAULT_NAME = '未命名项目';
 const MIGRATION_MARKER = '.projects-migrated';
 
 function normalizeName(value) {
-  const name = String(value ?? '').trim().slice(0, NAME_MAX);
+  const name = String(value ?? '')
+    .trim()
+    .slice(0, NAME_MAX);
   return name || DEFAULT_NAME;
 }
 
@@ -39,6 +41,14 @@ function namespaceProjectUrls(project, projectId) {
     }
   }
   return project;
+}
+
+function hasMatchingError(project, matcher) {
+  for (const node of Array.isArray(project.nodes) ? project.nodes : []) {
+    const run = node.data?.run;
+    if (run?.status === 'error' && run.error && matcher.test(run.error)) return true;
+  }
+  return false;
 }
 
 function moveInto(from, to) {
@@ -223,10 +233,24 @@ export class ProjectManager {
     return runtime;
   }
 
-  openAll() {
-    return this.list()
-      .map((item) => this.open(item.id))
-      .filter(Boolean);
+  // 只打开 run.error 命中 matcher 的项目，其余保持只在磁盘上，
+  // 避免启动或换 Key 时把所有项目都实例化进内存
+  openWithError(matcher) {
+    const hits = [];
+    for (const name of fs.readdirSync(this.projectsDir)) {
+      if (!ID_PATTERN.test(name)) continue;
+      const runtime = this.runtimes.get(name);
+      if (runtime) {
+        if (hasMatchingError(runtime.store.data, matcher)) hits.push(runtime);
+        continue;
+      }
+      const project = readJsonSafe(path.join(this.projectsDir, name, 'project.json'), null);
+      if (project && hasMatchingError(project, matcher)) {
+        const opened = this.open(name);
+        if (opened) hits.push(opened);
+      }
+    }
+    return hits;
   }
 
   create(name) {

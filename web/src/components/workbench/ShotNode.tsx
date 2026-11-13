@@ -7,7 +7,8 @@ import { pad, shortTimecode } from '../../utils/format';
 function ShotNodeView({ data, selected }: NodeProps<Node<ShotData>>) {
   const run = data.run;
   const busy = run.status === 'queued' || run.status === 'running';
-  const stale = !busy && run.candidates.some((candidate) => candidate.promptHash !== data.promptHash);
+  const stale =
+    !busy && run.candidates.some((candidate) => candidate.promptHash !== data.promptHash);
 
   const selectedIndex = Math.max(
     0,
@@ -72,7 +73,12 @@ function ShotNodeView({ data, selected }: NodeProps<Node<ShotData>>) {
           }
         >
           {selectedCandidate ? (
-            <img src={selectedCandidate.url} alt={`镜头 ${data.no}`} loading="lazy" draggable={false} />
+            <img
+              src={selectedCandidate.url}
+              alt={`镜头 ${data.no}`}
+              loading="lazy"
+              draggable={false}
+            />
           ) : busy ? (
             <div className="frame-empty is-loading">
               <span className="frame-spinner">

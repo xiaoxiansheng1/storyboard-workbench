@@ -80,7 +80,9 @@ export const createSettingsSlice: SliceCreator<SettingsSlice> = (set, get) => ({
       });
       const { project, settings } = get();
       set({
-        project: project ? { ...project, config: { ...project.config, usage: res.usage } } : project,
+        project: project
+          ? { ...project, config: { ...project.config, usage: res.usage } }
+          : project,
         settings: settings ? { ...settings, usage: res.usage } : settings,
       });
       get().notify('今日用量已重置', 'success');
@@ -98,7 +100,9 @@ export const createSettingsSlice: SliceCreator<SettingsSlice> = (set, get) => ({
       const project = get().project;
       set({
         settings: settings ? { ...settings, audio: res.audio } : settings,
-        project: project ? { ...project, config: { ...project.config, audio: res.audio } } : project,
+        project: project
+          ? { ...project, config: { ...project.config, audio: res.audio } }
+          : project,
       });
       get().notify('参考音色已上传', 'success');
     } catch (error) {
@@ -115,7 +119,9 @@ export const createSettingsSlice: SliceCreator<SettingsSlice> = (set, get) => ({
       const project = get().project;
       set({
         settings: settings ? { ...settings, audio: res.audio } : settings,
-        project: project ? { ...project, config: { ...project.config, audio: res.audio } } : project,
+        project: project
+          ? { ...project, config: { ...project.config, audio: res.audio } }
+          : project,
       });
       get().notify('已移除参考音色');
     } catch (error) {

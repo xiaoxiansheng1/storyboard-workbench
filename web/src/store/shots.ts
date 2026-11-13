@@ -6,7 +6,10 @@ import type { SliceCreator } from './base';
 
 export interface ShotsSlice {
   applyRun: (nodeId: string, run: Run, usage?: number) => void;
-  generate: (nodeId: string, options?: { n?: number; force?: boolean; seed?: number }) => Promise<void>;
+  generate: (
+    nodeId: string,
+    options?: { n?: number; force?: boolean; seed?: number },
+  ) => Promise<void>;
   patchNode: (nodeId: string, patch: Record<string, unknown>) => Promise<void>;
   selectCandidate: (nodeId: string, candidateId: string) => Promise<void>;
   uploadImage: (nodeId: string, file: File) => Promise<void>;

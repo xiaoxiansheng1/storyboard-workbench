@@ -18,7 +18,8 @@
 
 .audio-node.is-selected .node-card {
   border-color: color-mix(in srgb, var(--audio) 56%, transparent);
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--audio) 28%, transparent),
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--audio) 28%, transparent),
     var(--node-shadow);
 }
 
@@ -104,7 +105,10 @@
   background: var(--audio-soft);
   color: var(--audio);
   cursor: pointer;
-  transition: background 0.16s ease, border-color 0.16s ease, transform 0.16s ease;
+  transition:
+    background 0.16s ease,
+    border-color 0.16s ease,
+    transform 0.16s ease;
 }
 
 .audio-play:hover:not(:disabled) {
@@ -212,4 +216,4 @@
   font-size: 12px;
   line-height: 1.55;
   color: var(--text-2);
-}
+}

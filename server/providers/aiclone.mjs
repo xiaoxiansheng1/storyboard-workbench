@@ -57,7 +57,8 @@ function findImageUrl(payload) {
 
 function readState(payload) {
   const url = findImageUrl(payload);
-  const rawStatus = payload?.status ?? payload?.data?.status ?? payload?.state ?? payload?.data?.state;
+  const rawStatus =
+    payload?.status ?? payload?.data?.status ?? payload?.state ?? payload?.data?.state;
   const status = String(rawStatus || '').toLowerCase();
   if (url) return { url, status: 'completed' };
   if (/(failed|failure|error|cancel|expired|reject)/.test(status)) {
@@ -92,7 +93,7 @@ export function createAicloneProvider(config, initialModel) {
     });
 
     const text = await res.text();
-    let json = null;
+    let json;
     try {
       json = text ? JSON.parse(text) : null;
     } catch {

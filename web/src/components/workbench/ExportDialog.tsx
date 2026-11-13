@@ -106,7 +106,10 @@ function savePrefs(prefs: RenderPrefs) {
 
 function selectedCandidate(node: Node<ShotData>) {
   const run = node.data.run;
-  return run.candidates.find((item) => item.id === run.selectedId) || run.candidates[run.candidates.length - 1];
+  return (
+    run.candidates.find((item) => item.id === run.selectedId) ||
+    run.candidates[run.candidates.length - 1]
+  );
 }
 
 function resLabel(width: number, height: number): string {
@@ -235,7 +238,9 @@ export function ExportDialog() {
 
   const resolution = RESOLUTIONS.find((item) => item.id === prefs.resolution) ?? RESOLUTIONS[1];
   const running = job?.status === 'queued' || job?.status === 'running';
-  const missing = Array.from(new Set([...summary.missing, ...missingFromServer])).sort((a, b) => a - b);
+  const missing = Array.from(new Set([...summary.missing, ...missingFromServer])).sort(
+    (a, b) => a - b,
+  );
   const blocked = missing.length > 0 && !allowMissing;
   const canStart = shots.length > 0 && !blocked && !running && !starting;
   const done = job?.status === 'done' && Boolean(job.url);
@@ -276,250 +281,255 @@ export function ExportDialog() {
         ) : undefined
       }
     >
-        <div className="export-stats">
-          <div className="export-stat">
-            <span>镜头</span>
-            <b>{shots.length}</b>
-          </div>
-          <div className="export-stat">
-            <span>总时长</span>
-            <b>{clock(summary.duration)}</b>
-          </div>
-          <div className="export-stat">
-            <span>分辨率</span>
-            <b>{resolution.label}</b>
-            <span>
-              {resolution.width}×{resolution.height} · {prefs.fps}fps
+      <div className="export-stats">
+        <div className="export-stat">
+          <span>镜头</span>
+          <b>{shots.length}</b>
+        </div>
+        <div className="export-stat">
+          <span>总时长</span>
+          <b>{clock(summary.duration)}</b>
+        </div>
+        <div className="export-stat">
+          <span>分辨率</span>
+          <b>{resolution.label}</b>
+          <span>
+            {resolution.width}×{resolution.height} · {prefs.fps}fps
+          </span>
+        </div>
+      </div>
+
+      {running && job && (
+        <div className="export-progress">
+          <div className="export-progress-top">
+            <span className="export-pulse" />
+            <div className="export-progress-text">
+              <b>{job.stage}</b>
+              <span>
+                {jobSummary(job)} · {progressHint(job)}
+              </span>
+            </div>
+            <span className="export-percent">
+              {job.progress}
+              <i>%</i>
             </span>
           </div>
+          <div className="export-bar">
+            <i style={{ width: `${Math.max(2, job.progress)}%` }} />
+          </div>
+          <div className="export-progress-foot">
+            <span>可以关闭弹窗，合成会在后台继续</span>
+            <Button
+              type="button"
+              className="export-cancel"
+              onClick={() => void cancelExport(job.id)}
+            >
+              取消合成
+            </Button>
+          </div>
         </div>
+      )}
 
-        {running && job && (
-          <div className="export-progress">
-            <div className="export-progress-top">
-              <span className="export-pulse" />
-              <div className="export-progress-text">
-                <b>{job.stage}</b>
-                <span>
-                  {jobSummary(job)} · {progressHint(job)}
-                </span>
-              </div>
-              <span className="export-percent">
-                {job.progress}
-                <i>%</i>
-              </span>
-            </div>
-            <div className="export-bar">
-              <i style={{ width: `${Math.max(2, job.progress)}%` }} />
-            </div>
-            <div className="export-progress-foot">
-              <span>可以关闭弹窗，合成会在后台继续</span>
-              <Button type="button" className="export-cancel" onClick={() => void cancelExport(job.id)}>
-                取消合成
-              </Button>
-            </div>
+      {!running && done && job && (
+        <div className="export-result">
+          <div className="export-result-head">
+            <span className="export-result-title">渲染结果</span>
+            <span className="export-result-badge">{jobSummary(job)}</span>
           </div>
-        )}
-
-        {!running && done && job && (
-          <div className="export-result">
-            <div className="export-result-head">
-              <span className="export-result-title">渲染结果</span>
-              <span className="export-result-badge">{jobSummary(job)}</span>
-            </div>
-            <div className="export-player">
-              <video
-                key={src!}
-                className="export-video"
-                src={src!}
-                controls
-                playsInline
-                preload="auto"
-                onLoadedData={() => setMedia('ready')}
-                onError={() => setMedia('error')}
-              />
-              {media !== 'ready' && (
-                <div className={`export-player-state ${media === 'error' ? 'is-error' : ''}`}>
-                  {media === 'error' ? (
-                    <>
-                      <span>预览加载失败，可下载后播放</span>
-                      <Button
-                        type="button"
-                        className="export-retry"
-                        onClick={() => {
-                          setMedia('loading');
-                          setRetry((n) => n + 1);
-                        }}
-                      >
-                        重新加载
-                      </Button>
-                    </>
-                  ) : (
-                    <>
-                      <span className="export-spinner" />
-                      <span>正在载入预览…</span>
-                    </>
-                  )}
-                </div>
-              )}
-            </div>
-            <div className="export-result-foot">
-              <span>
-                {job.shots} 个镜头 · {clock(job.durationSec)} · {formatSize(job.size)} ·{' '}
-                {FIT_LABEL[job.options.fit || 'contain']}
-              </span>
-              <a className="export-download" href={job.url!} download={job.filename || undefined}>
-                <Download size={13} />
-                下载视频
-              </a>
-            </div>
-          </div>
-        )}
-
-        {!running && missing.length > 0 && (
-          <div className="export-warn">
-            <div className="export-warn-title">还有 {missing.length} 个镜头没有首帧</div>
-            <div className="export-warn-list">
-              {missing.slice(0, 12).map((no) => (
-                <span key={no}>镜头 {pad(no)}</span>
-              ))}
-              {missing.length > 12 && <span>等 {missing.length} 个</span>}
-            </div>
-            <label className="export-check">
-              <input
-                type="checkbox"
-                checked={allowMissing}
-                onChange={(event) => setAllowMissing(event.target.checked)}
-              />
-              <span>跳过这些镜头，只合成已有首帧</span>
-            </label>
-          </div>
-        )}
-
-        {!running && error && <div className="export-error">{error}</div>}
-
-        {!running && job?.status === 'error' && !error && (
-          <div className="export-error">{job.error || '合成失败'}</div>
-        )}
-
-        {!running && (
-          <div className="export-options">
-            <div className="export-options-title">渲染设置</div>
-            <div className="export-option">
-              <span className="export-option-label">分辨率</span>
-              <Segmented
-                label="分辨率"
-                options={RES_OPTIONS}
-                value={prefs.resolution}
-                disabled={starting}
-                compact
-                onChange={(value) => updatePrefs({ resolution: value })}
-              />
-            </div>
-            <div className="export-option">
-              <span className="export-option-label">帧率</span>
-              <Segmented
-                label="帧率"
-                options={FPS_CONTROLS}
-                value={prefs.fps}
-                disabled={starting}
-                compact
-                onChange={(value) => updatePrefs({ fps: value })}
-              />
-            </div>
-            <div className="export-option">
-              <span className="export-option-label">画面适配</span>
-              <Segmented
-                label="画面适配"
-                options={FIT_OPTIONS}
-                value={prefs.fit}
-                disabled={starting}
-                compact
-                onChange={(value) => updatePrefs({ fit: value })}
-              />
-            </div>
-            <div className="export-option">
-              <span className="export-option-label">画质</span>
-              <Segmented
-                label="画质"
-                options={QUALITY_OPTIONS}
-                value={prefs.quality}
-                disabled={starting}
-                compact
-                onChange={(value) => updatePrefs({ quality: value })}
-              />
-            </div>
-            <div className="export-option">
-              <span className="export-option-label">运镜</span>
-              <Segmented
-                label="运镜"
-                options={MOTION_OPTIONS}
-                value={prefs.motion}
-                disabled={starting}
-                compact
-                onChange={(value) => updatePrefs({ motion: value })}
-              />
-            </div>
-            <div className="export-option">
-              <span className="export-option-label">过渡</span>
-              <Segmented
-                label="镜头过渡"
-                options={TRANSITION_OPTIONS}
-                value={prefs.transition}
-                disabled={starting}
-                compact
-                onChange={(value) => updatePrefs({ transition: value })}
-              />
-            </div>
-            {prefs.transition !== 'none' && (
-              <div className="export-option">
-                <span className="export-option-label">过渡时长</span>
-                <Segmented
-                  label="过渡时长"
-                  options={TRANSITION_SECONDS.map((value) => ({
-                    value,
-                    label: `${value.toFixed(1)}s`,
-                  }))}
-                  value={prefs.transitionSec}
-                  disabled={starting}
-                  compact
-                  onChange={(value) => updatePrefs({ transitionSec: value })}
-                />
+          <div className="export-player">
+            <video
+              key={src!}
+              className="export-video"
+              src={src!}
+              controls
+              playsInline
+              preload="auto"
+              onLoadedData={() => setMedia('ready')}
+              onError={() => setMedia('error')}
+            />
+            {media !== 'ready' && (
+              <div className={`export-player-state ${media === 'error' ? 'is-error' : ''}`}>
+                {media === 'error' ? (
+                  <>
+                    <span>预览加载失败，可下载后播放</span>
+                    <Button
+                      type="button"
+                      className="export-retry"
+                      onClick={() => {
+                        setMedia('loading');
+                        setRetry((n) => n + 1);
+                      }}
+                    >
+                      重新加载
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <span className="export-spinner" />
+                    <span>正在载入预览…</span>
+                  </>
+                )}
               </div>
             )}
-            {prefs.transition === 'crossfade' && (
-              <p className="export-option-hint">叠化会让相邻镜头定格画面交叠，总时长不变，渲染略慢。</p>
-            )}
-            {resolution.id === '4k' && (
-              <p className="export-option-hint">4K 会放大小尺寸首帧，渲染耗时更长。</p>
-            )}
           </div>
-        )}
+          <div className="export-result-foot">
+            <span>
+              {job.shots} 个镜头 · {clock(job.durationSec)} · {formatSize(job.size)} ·{' '}
+              {FIT_LABEL[job.options.fit || 'contain']}
+            </span>
+            <a className="export-download" href={job.url!} download={job.filename || undefined}>
+              <Download size={13} />
+              下载视频
+            </a>
+          </div>
+        </div>
+      )}
 
-        {!running && summary.stale > 0 && (
-          <p className="modal-note">
-            有 {summary.stale} 个镜头的提示词已修改，将使用最后一次生成的图。
-          </p>
-        )}
-
-        {!running && recent.length > 0 && (
-          <div className="export-history">
-            <div className="export-history-title">最近合成</div>
-            {recent.map((item) => (
-              <Button
-                key={item.id}
-                type="button"
-                className={`export-history-row ${job?.id === item.id ? 'on' : ''}`}
-                onClick={() => viewExport(item)}
-              >
-                <span className="export-history-time">{formatDateTime(item.createdAt)}</span>
-                <span className="export-history-meta">{historySummary(item)}</span>
-                <span className={`export-history-status ${item.status}`}>{statusLabel(item)}</span>
-              </Button>
+      {!running && missing.length > 0 && (
+        <div className="export-warn">
+          <div className="export-warn-title">还有 {missing.length} 个镜头没有首帧</div>
+          <div className="export-warn-list">
+            {missing.slice(0, 12).map((no) => (
+              <span key={no}>镜头 {pad(no)}</span>
             ))}
+            {missing.length > 12 && <span>等 {missing.length} 个</span>}
           </div>
-        )}
+          <label className="export-check">
+            <input
+              type="checkbox"
+              checked={allowMissing}
+              onChange={(event) => setAllowMissing(event.target.checked)}
+            />
+            <span>跳过这些镜头，只合成已有首帧</span>
+          </label>
+        </div>
+      )}
 
+      {!running && error && <div className="export-error">{error}</div>}
+
+      {!running && job?.status === 'error' && !error && (
+        <div className="export-error">{job.error || '合成失败'}</div>
+      )}
+
+      {!running && (
+        <div className="export-options">
+          <div className="export-options-title">渲染设置</div>
+          <div className="export-option">
+            <span className="export-option-label">分辨率</span>
+            <Segmented
+              label="分辨率"
+              options={RES_OPTIONS}
+              value={prefs.resolution}
+              disabled={starting}
+              compact
+              onChange={(value) => updatePrefs({ resolution: value })}
+            />
+          </div>
+          <div className="export-option">
+            <span className="export-option-label">帧率</span>
+            <Segmented
+              label="帧率"
+              options={FPS_CONTROLS}
+              value={prefs.fps}
+              disabled={starting}
+              compact
+              onChange={(value) => updatePrefs({ fps: value })}
+            />
+          </div>
+          <div className="export-option">
+            <span className="export-option-label">画面适配</span>
+            <Segmented
+              label="画面适配"
+              options={FIT_OPTIONS}
+              value={prefs.fit}
+              disabled={starting}
+              compact
+              onChange={(value) => updatePrefs({ fit: value })}
+            />
+          </div>
+          <div className="export-option">
+            <span className="export-option-label">画质</span>
+            <Segmented
+              label="画质"
+              options={QUALITY_OPTIONS}
+              value={prefs.quality}
+              disabled={starting}
+              compact
+              onChange={(value) => updatePrefs({ quality: value })}
+            />
+          </div>
+          <div className="export-option">
+            <span className="export-option-label">运镜</span>
+            <Segmented
+              label="运镜"
+              options={MOTION_OPTIONS}
+              value={prefs.motion}
+              disabled={starting}
+              compact
+              onChange={(value) => updatePrefs({ motion: value })}
+            />
+          </div>
+          <div className="export-option">
+            <span className="export-option-label">过渡</span>
+            <Segmented
+              label="镜头过渡"
+              options={TRANSITION_OPTIONS}
+              value={prefs.transition}
+              disabled={starting}
+              compact
+              onChange={(value) => updatePrefs({ transition: value })}
+            />
+          </div>
+          {prefs.transition !== 'none' && (
+            <div className="export-option">
+              <span className="export-option-label">过渡时长</span>
+              <Segmented
+                label="过渡时长"
+                options={TRANSITION_SECONDS.map((value) => ({
+                  value,
+                  label: `${value.toFixed(1)}s`,
+                }))}
+                value={prefs.transitionSec}
+                disabled={starting}
+                compact
+                onChange={(value) => updatePrefs({ transitionSec: value })}
+              />
+            </div>
+          )}
+          {prefs.transition === 'crossfade' && (
+            <p className="export-option-hint">
+              叠化会让相邻镜头定格画面交叠，总时长不变，渲染略慢。
+            </p>
+          )}
+          {resolution.id === '4k' && (
+            <p className="export-option-hint">4K 会放大小尺寸首帧，渲染耗时更长。</p>
+          )}
+        </div>
+      )}
+
+      {!running && summary.stale > 0 && (
+        <p className="modal-note">
+          有 {summary.stale} 个镜头的提示词已修改，将使用最后一次生成的图。
+        </p>
+      )}
+
+      {!running && recent.length > 0 && (
+        <div className="export-history">
+          <div className="export-history-title">最近合成</div>
+          {recent.map((item) => (
+            <Button
+              key={item.id}
+              type="button"
+              className={`export-history-row ${job?.id === item.id ? 'on' : ''}`}
+              onClick={() => viewExport(item)}
+            >
+              <span className="export-history-time">{formatDateTime(item.createdAt)}</span>
+              <span className="export-history-meta">{historySummary(item)}</span>
+              <span className={`export-history-status ${item.status}`}>{statusLabel(item)}</span>
+            </Button>
+          ))}
+        </div>
+      )}
     </Modal>
   );
 }

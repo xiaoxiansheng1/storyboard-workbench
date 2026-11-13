@@ -3,7 +3,11 @@
   overflow-y: auto;
   background:
     radial-gradient(1200px 600px at 14% -16%, var(--accent-soft), transparent 62%),
-    radial-gradient(900px 460px at 96% -4%, color-mix(in srgb, var(--accent) 5%, transparent), transparent 64%),
+    radial-gradient(
+      900px 460px at 96% -4%,
+      color-mix(in srgb, var(--accent) 5%, transparent),
+      transparent 64%
+    ),
     var(--bg);
 }
 
@@ -132,7 +136,10 @@
   background: color-mix(in srgb, var(--surface) 96%, transparent);
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.02) inset;
   cursor: pointer;
-  transition: border-color 0.18s ease, transform 0.18s ease, box-shadow 0.18s ease;
+  transition:
+    border-color 0.18s ease,
+    transform 0.18s ease,
+    box-shadow 0.18s ease;
 }
 
 .card:hover {
@@ -190,7 +197,9 @@
   gap: 4px;
   opacity: 0;
   transform: translateY(-3px);
-  transition: opacity 0.16s ease, transform 0.16s ease;
+  transition:
+    opacity 0.16s ease,
+    transform 0.16s ease;
   z-index: 1;
 }
 

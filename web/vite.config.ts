@@ -22,7 +22,16 @@ export default defineConfig({
     port: 5173,
     strictPort: false,
     proxy: {
-      '/api': `http://127.0.0.1:${apiPort()}`,
+      '/api': {
+        target: `http://127.0.0.1:${apiPort()}`,
+        configure: (proxy) => {
+          proxy.on('error', (_error, _request, response) => {
+            // 直接断开浏览器侧连接：EventSource 把断连当临时网络错误会继续重试。
+            // 不能回 502 —— Chrome 对非 200 状态码会永久停止重连（CLOSED）
+            response?.destroy?.();
+          });
+        },
+      },
       '/assets': `http://127.0.0.1:${apiPort()}`,
       '/exports': `http://127.0.0.1:${apiPort()}`,
     },

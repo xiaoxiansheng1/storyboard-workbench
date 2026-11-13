@@ -17,7 +17,12 @@ export function toFlowNode(node: ProjectNode): Node<WorkbenchNodeData> {
   };
 }
 
-export function toFlowEdge(edge: { id: string; source: string; target: string; kind?: string }): Edge {
+export function toFlowEdge(edge: {
+  id: string;
+  source: string;
+  target: string;
+  kind?: string;
+}): Edge {
   const audio = edge.kind === 'audio';
   return {
     id: edge.id,

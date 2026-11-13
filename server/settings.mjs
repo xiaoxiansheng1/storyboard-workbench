@@ -8,7 +8,15 @@ export const IMAGE_SIZES = ['1:1', '4:3', '3:4', '16:9', '9:16'];
 
 export const DEFAULT_IMAGE_SIZE = '16:9';
 
-const FIELDS = ['provider', 'imageModel', 'apiKey', 'promptLang', 'imageSize', 'audioBaseUrl', 'audioInferMode'];
+const FIELDS = [
+  'provider',
+  'imageModel',
+  'apiKey',
+  'promptLang',
+  'imageSize',
+  'audioBaseUrl',
+  'audioInferMode',
+];
 
 export const SETTING_LIMITS = {
   concurrency: [1, 8],

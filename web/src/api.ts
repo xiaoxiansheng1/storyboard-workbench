@@ -28,7 +28,8 @@ function parseJson(text: string): unknown {
 async function toApiError(error: unknown): Promise<unknown> {
   if (error instanceof HTTPError) {
     const payload = typeof error.data === 'string' ? null : (error.data ?? null);
-    const message = (payload as { error?: string } | null)?.error || `HTTP ${error.response.status}`;
+    const message =
+      (payload as { error?: string } | null)?.error || `HTTP ${error.response.status}`;
     const apiError = new Error(message) as ApiError;
     apiError.payload = payload;
     return apiError;

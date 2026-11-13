@@ -73,16 +73,26 @@ export function useWaveform(
   useEffect(() => {
     let alive = true;
     setPeaks([]);
-    if (!candidateId) return () => { alive = false; };
+    if (!candidateId)
+      return () => {
+        alive = false;
+      };
     if (inline) {
       setPeaks(inline);
-      return () => { alive = false; };
+      return () => {
+        alive = false;
+      };
     }
-    if (!projectId) return () => { alive = false; };
+    if (!projectId)
+      return () => {
+        alive = false;
+      };
     void peaksFor(projectId, nodeId, { id: candidateId }).then((value) => {
       if (alive && value.length) setPeaks(value);
     });
-    return () => { alive = false; };
+    return () => {
+      alive = false;
+    };
   }, [candidateId, inline, projectId, nodeId]);
 
   return useMemo(() => {
@@ -105,8 +115,7 @@ export function useAudioProgress(options: {
     const audio = audioRef.current;
     const track = trackRef.current;
     if (!audio) return;
-    const total =
-      Number.isFinite(audio.duration) && audio.duration > 0 ? audio.duration : duration;
+    const total = Number.isFinite(audio.duration) && audio.duration > 0 ? audio.duration : duration;
     const ratio = total > 0 ? Math.min(1, Math.max(0, audio.currentTime / total)) : 0;
     track?.style.setProperty('--audio-progress', `${(ratio * 100).toFixed(3)}%`);
     if (timeRef.current && total > 0) {

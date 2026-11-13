@@ -84,15 +84,15 @@ IMAGE_SIZE=1536x1024
 
 兼容性约定：
 
-| 项目 | 行为 |
-| --- | --- |
-| 批量 | 每个候选图单独发一次请求（`n=1`），避免端点不支持 `n>1` |
-| 返回 | `b64_json` 与 `url` 都支持；相对 URL 按 `OPENAI_BASE_URL` 解析 |
-| `response_format` | 默认 `auto` 不发送，兼容 gpt-image-1 与 DALL·E 系的差异；可显式设 `b64_json` / `url` |
-| 负面词 | 生图 API 没有原生负面词参数，默认以 `Avoid: ...` 追加到 prompt 末尾，`APPEND_NEGATIVE=false` 可关 |
-| seed | 默认不发送（部分端点会 400），需要时 `REQUEST_SEED=true` |
-| 自定义鉴权 | `IMAGE_EXTRA_HEADERS={"x-api-key":"..."}`，也支持 `IMAGE_EXTRA_BODY` 追加请求体 |
-| 尺寸 | **按模型填**：gpt-image-1 只接受 `1024x1024 / 1536x1024 / 1024x1536`；dall-e-3 接受 `1792x1024`；多数兼容端点接受 `1280x720` |
+| 项目              | 行为                                                                                                                         |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| 批量              | 每个候选图单独发一次请求（`n=1`），避免端点不支持 `n>1`                                                                      |
+| 返回              | `b64_json` 与 `url` 都支持；相对 URL 按 `OPENAI_BASE_URL` 解析                                                               |
+| `response_format` | 默认 `auto` 不发送，兼容 gpt-image-1 与 DALL·E 系的差异；可显式设 `b64_json` / `url`                                         |
+| 负面词            | 生图 API 没有原生负面词参数，默认以 `Avoid: ...` 追加到 prompt 末尾，`APPEND_NEGATIVE=false` 可关                            |
+| seed              | 默认不发送（部分端点会 400），需要时 `REQUEST_SEED=true`                                                                     |
+| 自定义鉴权        | `IMAGE_EXTRA_HEADERS={"x-api-key":"..."}`，也支持 `IMAGE_EXTRA_BODY` 追加请求体                                              |
+| 尺寸              | **按模型填**：gpt-image-1 只接受 `1024x1024 / 1536x1024 / 1024x1536`；dall-e-3 接受 `1792x1024`；多数兼容端点接受 `1280x720` |
 
 默认送中文提示词，可在「系统设置 → 送模型提示词」或 `.env` 的 `PROMPT_LANG=en` 切到英文。
 
@@ -100,9 +100,9 @@ IMAGE_SIZE=1536x1024
 
 「系统设置 → 生成限制」可以查看今日全局用量并修改以下护栏，保存后立即生效（页面设置优先于 `.env`）：
 
-| 项目 | 默认 | 范围 | 说明 |
-| --- | --- | --- | --- |
-| 并发数 | `2` | 1–8 | 同时生成的首帧数量，队列会按新值立即调度 |
+| 项目         | 默认 | 范围  | 说明                                         |
+| ------------ | ---- | ----- | -------------------------------------------- |
+| 并发数       | `2`  | 1–8   | 同时生成的首帧数量，队列会按新值立即调度     |
 | 单次批量上限 | `50` | 1–500 | 一次批量提交的镜头数上限，超出会被服务端拒绝 |
 
 每日生成上限由 `.env` 的 `DAILY_IMAGE_CAP` 控制（默认 `200`，按自然日重置，所有项目共享同一份计数）；达到上限后停止提交，可在设置里的用量卡片重置当日计数。其余环境变量为 `IMAGE_CONCURRENCY`、`MAX_BATCH_SIZE`。
@@ -130,28 +130,28 @@ data/
 
 ## API
 
-| 方法 | 路径 | 说明 |
-| --- | --- | --- |
-| GET | `/api/project` | 项目 + 节点 + 边 + 运行配置/用量 |
-| GET | `/api/settings` | 生图服务、默认模型、Key 掩码 |
-| PATCH | `/api/settings` | `{provider, imageModel, apiKey, promptLang, concurrency, maxBatch}`，保存系统设置 |
-| POST | `/api/import` | `{csv, name, sourceFile}`，替换画布 |
-| PATCH | `/api/nodes/:id` | 位置、文案、提示词、负面词 |
-| POST | `/api/nodes/:id/generate` | `{n, force, seed}` |
-| POST | `/api/nodes/:id/select` | `{candidateId}` |
-| POST | `/api/nodes/:id/upload` | `{dataUrl, filename}`，上传本地图片作为当前首帧（≤32 MB） |
-| DELETE | `/api/nodes/:id/run` | 清空该镜的候选记录，并删除不再被引用的图片文件 |
-| POST | `/api/generate/batch` | `{nodeIds?, scope?, n, force}`，`nodeIds` 优先 |
-| POST | `/api/jobs/cancel` | 取消当前项目排队中和进行中的生成任务 |
-| POST | `/api/jobs/:nodeId/cancel` | 取消单个镜头的生成任务（排队中或进行中） |
-| POST | `/api/usage/reset` | 今日生成计数清零（不删图） |
-| GET | `/api/exports` | 当前合成任务 + 历史记录 |
-| POST | `/api/exports` | `{width,height,fps,fit,quality,motion,allowMissing}`，开始合成（`fit=contain/cover`，`quality=standard/high`，`motion=none/in/out`） |
-| GET | `/api/exports/:id` | 单个合成任务 |
-| POST | `/api/exports/:id/cancel` | 取消正在进行的合成 |
-| GET | `/api/events` | SSE，`run` / `settings` / `export` 事件 |
-| GET | `/assets/:nodeId/:file` | 候选图静态文件 |
-| GET | `/exports/:file` | 合成视频静态文件（支持 Range） |
+| 方法   | 路径                       | 说明                                                                                                                                 |
+| ------ | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| GET    | `/api/project`             | 项目 + 节点 + 边 + 运行配置/用量                                                                                                     |
+| GET    | `/api/settings`            | 生图服务、默认模型、Key 掩码                                                                                                         |
+| PATCH  | `/api/settings`            | `{provider, imageModel, apiKey, promptLang, concurrency, maxBatch}`，保存系统设置                                                    |
+| POST   | `/api/import`              | `{csv, name, sourceFile}`，替换画布                                                                                                  |
+| PATCH  | `/api/nodes/:id`           | 位置、文案、提示词、负面词                                                                                                           |
+| POST   | `/api/nodes/:id/generate`  | `{n, force, seed}`                                                                                                                   |
+| POST   | `/api/nodes/:id/select`    | `{candidateId}`                                                                                                                      |
+| POST   | `/api/nodes/:id/upload`    | `{dataUrl, filename}`，上传本地图片作为当前首帧（≤32 MB）                                                                            |
+| DELETE | `/api/nodes/:id/run`       | 清空该镜的候选记录，并删除不再被引用的图片文件                                                                                       |
+| POST   | `/api/generate/batch`      | `{nodeIds?, scope?, n, force}`，`nodeIds` 优先                                                                                       |
+| POST   | `/api/jobs/cancel`         | 取消当前项目排队中和进行中的生成任务                                                                                                 |
+| POST   | `/api/jobs/:nodeId/cancel` | 取消单个镜头的生成任务（排队中或进行中）                                                                                             |
+| POST   | `/api/usage/reset`         | 今日生成计数清零（不删图）                                                                                                           |
+| GET    | `/api/exports`             | 当前合成任务 + 历史记录                                                                                                              |
+| POST   | `/api/exports`             | `{width,height,fps,fit,quality,motion,allowMissing}`，开始合成（`fit=contain/cover`，`quality=standard/high`，`motion=none/in/out`） |
+| GET    | `/api/exports/:id`         | 单个合成任务                                                                                                                         |
+| POST   | `/api/exports/:id/cancel`  | 取消正在进行的合成                                                                                                                   |
+| GET    | `/api/events`              | SSE，`run` / `settings` / `export` 事件                                                                                              |
+| GET    | `/assets/:nodeId/:file`    | 候选图静态文件                                                                                                                       |
+| GET    | `/exports/:file`           | 合成视频静态文件（支持 Range）                                                                                                       |
 
 ## 结构
 

@@ -37,7 +37,9 @@ function runTool(bin, args, timeoutMs = 30000) {
         resolve(stdout);
         return;
       }
-      reject(new Error(stderr.trim().split(/\r?\n/).slice(-3).join(' ') || `${bin} 退出码 ${code}`));
+      reject(
+        new Error(stderr.trim().split(/\r?\n/).slice(-3).join(' ') || `${bin} 退出码 ${code}`),
+      );
     });
   });
 }
@@ -77,7 +79,8 @@ export async function probeVideo(ffprobePath, file) {
   };
 }
 
-export async function probeAudio(ffprobePath, file) {  const stdout = await runTool(ffprobePath, [
+export async function probeAudio(ffprobePath, file) {
+  const stdout = await runTool(ffprobePath, [
     '-v',
     'error',
     '-select_streams',

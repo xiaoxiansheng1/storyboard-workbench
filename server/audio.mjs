@@ -132,8 +132,14 @@ export function orderedAudioNodes(nodes, edges = []) {
     }
   };
 
-  audio.filter((node) => !incoming.has(node.id)).sort(byAudioNo).forEach(walk);
-  audio.filter((node) => !seen.has(node.id)).sort(byAudioNo).forEach(walk);
+  audio
+    .filter((node) => !incoming.has(node.id))
+    .sort(byAudioNo)
+    .forEach(walk);
+  audio
+    .filter((node) => !seen.has(node.id))
+    .sort(byAudioNo)
+    .forEach(walk);
   return ordered;
 }
 
@@ -182,7 +188,12 @@ function stripSubtitle(raw) {
       if (!value) return false;
       if (/^WEBVTT/i.test(value)) return false;
       if (/^\d+$/.test(value)) return false;
-      if (/^\d{1,2}:\d{2}(?::\d{2})?[,.]\d{1,3}\s*-->\s*\d{1,2}:\d{2}(?::\d{2})?[,.]\d{1,3}/.test(value)) return false;
+      if (
+        /^\d{1,2}:\d{2}(?::\d{2})?[,.]\d{1,3}\s*-->\s*\d{1,2}:\d{2}(?::\d{2})?[,.]\d{1,3}/.test(
+          value,
+        )
+      )
+        return false;
       return true;
     })
     .map((line) => line.replace(/<[^>]+>/g, '').replace(/\{\\[^}]+\}/g, ''))
@@ -213,9 +224,14 @@ function splitLong(piece, limit) {
 }
 
 export function splitAudioText(raw, chunkChars = CHUNK_DEFAULT) {
-  const text = stripSubtitle(raw).replace(/[ \t]+/g, ' ').trim();
+  const text = stripSubtitle(raw)
+    .replace(/[ \t]+/g, ' ')
+    .trim();
   if (!text) return [];
-  const limit = Math.max(CHUNK_MIN, Math.min(CHUNK_MAX, Math.trunc(Number(chunkChars)) || CHUNK_DEFAULT));
+  const limit = Math.max(
+    CHUNK_MIN,
+    Math.min(CHUNK_MAX, Math.trunc(Number(chunkChars)) || CHUNK_DEFAULT),
+  );
 
   const sentences = [];
   let buffer = '';

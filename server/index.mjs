@@ -1,6 +1,7 @@
 import express from 'express';
 import fs from 'node:fs';
 import path from 'node:path';
+import crypto from 'node:crypto';
 import { config } from './config.mjs';
 import { ProjectManager, ID_PATTERN } from './projects.mjs';
 import { parseCsv } from './utils/csv.mjs';
@@ -8,10 +9,16 @@ import { buildProject } from './import.mjs';
 import { createProvider } from './providers/index.mjs';
 import { createIndexTTSProvider } from './providers/indextts.mjs';
 import { AICLONE_MODELS } from './providers/aiclone.mjs';
-import { Settings, SETTING_LIMITS, AUDIO_INFER_MODES, IMAGE_SIZES, DEFAULT_IMAGE_SIZE } from './settings.mjs';
+import {
+  Settings,
+  SETTING_LIMITS,
+  AUDIO_INFER_MODES,
+  IMAGE_SIZES,
+  DEFAULT_IMAGE_SIZE,
+} from './settings.mjs';
 import { hashPrompt } from './hash.mjs';
 import { roundTo } from './utils/num.mjs';
-import { saveAsset, pruneAssets } from './assets.mjs';
+import { extFromMime, pruneAssets, saveAsset, sniffExt } from './assets.mjs';
 import { Usage } from './usage.mjs';
 import { audioPeaks, extractPoster, probeVideo, probeAudio } from './video.mjs';
 import { VoiceStore } from './voice.mjs';
@@ -27,6 +34,45 @@ import {
   renumberAudio,
   splitAudioText,
 } from './audio.mjs';
+
+// data/ 被两个服务进程同时读写会互相覆盖（各自内存态最后落盘的一方赢），
+// 启动时用锁文件保证同一份 data/ 只有一个服务进程
+const lockFile = path.join(config.dataDir, 'server.lock');
+function acquireLock() {
+  fs.mkdirSync(config.dataDir, { recursive: true });
+  if (fs.existsSync(lockFile)) {
+    try {
+      const info = JSON.parse(fs.readFileSync(lockFile, 'utf8'));
+      if (info?.pid && info.pid !== process.pid) {
+        let alive;
+        try {
+          process.kill(info.pid, 0);
+          alive = true;
+        } catch (error) {
+          alive = error.code === 'EPERM'; // 无权发信号但进程存在
+        }
+        if (alive) return info;
+      }
+    } catch {
+      // 锁文件损坏视同残留，直接接管
+    }
+  }
+  fs.writeFileSync(
+    lockFile,
+    JSON.stringify({ pid: process.pid, port: config.port, startedAt: new Date().toISOString() }),
+  );
+  return null;
+}
+const lockConflict = acquireLock();
+if (lockConflict) {
+  console.error(
+    `[storyboard-workbench] data/ 正被另一个服务进程使用 (pid=${lockConflict.pid}${lockConflict.port ? `, port=${lockConflict.port}` : ''})`,
+  );
+  console.error(
+    '[storyboard-workbench] 请先关闭那个进程再启动；若它已不存在，删除 data/server.lock 即可',
+  );
+  process.exit(1);
+}
 
 const settings = new Settings(config.dataDir);
 if (settings.data.apiKey) config.aiclone.apiKey = settings.data.apiKey;
@@ -83,7 +129,8 @@ function currentProvider() {
     providerCache.set(name, createProvider(config, name, settings.data.imageModel));
   }
   const provider = providerCache.get(name);
-  if (provider.name === 'aiclone' && settings.data.imageModel) provider.model = settings.data.imageModel;
+  if (provider.name === 'aiclone' && settings.data.imageModel)
+    provider.model = settings.data.imageModel;
   return provider;
 }
 
@@ -123,12 +170,13 @@ const projects = new ProjectManager({
 });
 
 const MISSING_KEY_ERROR = /未配置\s*AICLONE_API_KEY/;
-const CREDENTIAL_ERROR = /未配置\s*AICLONE_API_KEY|HTTP\s*(401|402|403)|unauthorized|invalid.{0,20}key/i;
+const CREDENTIAL_ERROR =
+  /未配置\s*AICLONE_API_KEY|HTTP\s*(401|402|403)|unauthorized|invalid.{0,20}key/i;
 
 function clearCredentialErrors(matcher) {
   if (!providerHasKey(currentProvider())) return 0;
   let changed = 0;
-  for (const runtime of projects.openAll()) {
+  for (const runtime of projects.openWithError(matcher)) {
     let touched = false;
     for (const node of runtime.store.data.nodes) {
       const run = node.data?.run;
@@ -347,7 +395,10 @@ app.post('/api/voice', voiceBody, async (req, res) => {
     res.status(400).json({ error: '没有收到参考音频' });
     return;
   }
-  const mime = String(req.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
+  const mime = String(req.headers['content-type'] || '')
+    .split(';')[0]
+    .trim()
+    .toLowerCase();
   if (!mime.startsWith('audio/') && mime !== 'application/octet-stream') {
     res.status(400).json({ error: '请选择 WAV / MP3 / M4A / FLAC / OGG 音频' });
     return;
@@ -424,13 +475,7 @@ app.get('/api/events', (req, res) => {
   });
 });
 
-const UPLOAD_MIMES = new Set([
-  'image/png',
-  'image/jpeg',
-  'image/webp',
-  'image/gif',
-  'image/avif',
-]);
+const UPLOAD_MIMES = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/avif']);
 const UPLOAD_MAX_BYTES = 32 * 1024 * 1024;
 const imageBody = express.raw({
   type: ['image/*', 'application/octet-stream'],
@@ -438,14 +483,13 @@ const imageBody = express.raw({
 });
 
 const VIDEO_MAX_BYTES = 256 * 1024 * 1024;
-const videoBody = express.raw({
-  type: ['video/*', 'application/octet-stream'],
-  limit: VIDEO_MAX_BYTES,
-});
 
 function removeVideoAssets(store, nodeId, video) {
   if (!video) return;
-  const names = [video.filename, video.posterUrl ? path.basename(video.posterUrl.split('?')[0]) : ''];
+  const names = [
+    video.filename,
+    video.posterUrl ? path.basename(video.posterUrl.split('?')[0]) : '',
+  ];
   for (const name of names) {
     if (!name) continue;
     try {
@@ -454,6 +498,56 @@ function removeVideoAssets(store, nodeId, video) {
       // 文件已被删除时忽略
     }
   }
+}
+
+// 流式保存上传视频：边收边写盘，避免大文件整包读进内存
+function saveVideoUpload(req, destPath, maxBytes) {
+  return new Promise((resolve, reject) => {
+    let size = 0;
+    let settled = false;
+    const ws = fs.createWriteStream(destPath);
+    const fail = (error) => {
+      if (settled) return;
+      settled = true;
+      ws.destroy();
+      ws.once('close', () => fs.rm(destPath, { force: true }, () => {}));
+      reject(error);
+    };
+    req.on('data', (chunk) => {
+      if (settled) return;
+      size += chunk.length;
+      if (size > maxBytes) {
+        // 先暂停让上层把 413 响应发出去，未消费的请求体由 Node 随响应关闭连接
+        req.pause();
+        fail(
+          Object.assign(new Error(`视频超过 ${Math.round(maxBytes / 1024 / 1024)} MB 上限`), {
+            code: 'REQUEST_TOO_LARGE',
+          }),
+        );
+        return;
+      }
+      if (!ws.write(chunk)) {
+        req.pause();
+        ws.once('drain', () => req.resume());
+      }
+    });
+    req.on('end', () => {
+      if (settled) return;
+      ws.end();
+      // 等 close（句柄真正释放）再 resolve，Windows 上 rename 一个还开着的文件会失败
+      ws.once('close', () => {
+        if (settled) return;
+        settled = true;
+        resolve(size);
+      });
+    });
+    req.on('error', (error) => fail(error));
+    req.on('close', () => {
+      if (settled || ws.writableEnded) return;
+      fail(new Error('上传中断'));
+    });
+    ws.on('error', (error) => fail(error));
+  });
 }
 
 async function writeVideoPoster(runtime, nodeId, video, atSec) {
@@ -585,7 +679,11 @@ projectRouter.patch('/nodes/:id', (req, res) => {
   }
 
   const body = req.body || {};
-  if (body.position && Number.isFinite(Number(body.position.x)) && Number.isFinite(Number(body.position.y))) {
+  if (
+    body.position &&
+    Number.isFinite(Number(body.position.x)) &&
+    Number.isFinite(Number(body.position.y))
+  ) {
     node.position = { x: Number(body.position.x), y: Number(body.position.y) };
   }
 
@@ -659,7 +757,10 @@ projectRouter.post('/nodes/:id/upload', imageBody, (req, res) => {
     res.status(400).json({ error: '没有收到图片文件' });
     return;
   }
-  const mime = String(req.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
+  const mime = String(req.headers['content-type'] || '')
+    .split(';')[0]
+    .trim()
+    .toLowerCase();
   if (!UPLOAD_MIMES.has(mime)) {
     res.status(400).json({ error: '请选择 PNG / JPG / WebP / GIF / AVIF 图片' });
     return;
@@ -722,7 +823,7 @@ projectRouter.delete('/nodes/:id/run', (req, res) => {
   res.json({ node });
 });
 
-projectRouter.post('/nodes/:id/video', videoBody, async (req, res) => {
+projectRouter.post('/nodes/:id/video', async (req, res) => {
   const runtime = req.project;
   const { store, assetBase } = runtime;
   const node = store.node(req.params.id);
@@ -734,18 +835,54 @@ projectRouter.post('/nodes/:id/video', videoBody, async (req, res) => {
     res.status(400).json({ error: '音频节点不能上传镜头视频' });
     return;
   }
-  if (!Buffer.isBuffer(req.body) || !req.body.length) {
-    res.status(400).json({ error: '没有收到视频文件' });
-    return;
-  }
-  const mime = String(req.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
+  const mime = String(req.headers['content-type'] || '')
+    .split(';')[0]
+    .trim()
+    .toLowerCase();
   if (!mime.startsWith('video/') && mime !== 'application/octet-stream') {
     res.status(400).json({ error: '请选择 MP4 / MOV / WebM 等视频文件' });
     return;
   }
 
-  const asset = saveAsset(store.assetsDir, node.id, { data: req.body, mime }, assetBase);
-  const source = path.join(store.assetsDir, node.id, asset.filename);
+  const dir = path.join(store.assetsDir, node.id);
+  const id = `${Date.now().toString(36)}-${crypto.randomBytes(3).toString('hex')}`;
+  let filename;
+  let source;
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+    const tempPath = path.join(dir, `${id}.tmp`);
+    const size = await saveVideoUpload(req, tempPath, VIDEO_MAX_BYTES);
+    if (!size) {
+      fs.rmSync(tempPath, { force: true });
+      res.status(400).json({ error: '没有收到视频文件' });
+      return;
+    }
+    // mime 给不出扩展名时用文件头嗅探，静态服务才能返回正确的 Content-Type
+    let ext = extFromMime(mime, '');
+    if (!ext) {
+      const head = Buffer.alloc(16);
+      const fd = fs.openSync(tempPath, 'r');
+      try {
+        fs.readSync(fd, head, 0, 16, 0);
+      } finally {
+        fs.closeSync(fd);
+      }
+      ext = sniffExt(head);
+    }
+    filename = `${id}.${ext}`;
+    source = path.join(dir, filename);
+    fs.renameSync(tempPath, source);
+  } catch (error) {
+    if (error.code === 'REQUEST_TOO_LARGE') {
+      res
+        .status(413)
+        .json({ error: `视频超过 ${Math.round(VIDEO_MAX_BYTES / 1024 / 1024)} MB 上限` });
+      return;
+    }
+    res.status(500).json({ error: `保存视频失败：${error.message}` });
+    return;
+  }
+
   let meta;
   try {
     meta = await probeVideo(config.ffprobePath, source);
@@ -757,8 +894,8 @@ projectRouter.post('/nodes/:id/video', videoBody, async (req, res) => {
 
   removeVideoAssets(store, node.id, node.data.video);
   const video = {
-    filename: asset.filename,
-    url: asset.url,
+    filename,
+    url: `${assetBase}/${node.id}/${filename}`,
     posterUrl: null,
     durationSec: roundTo(meta.durationSec, 3),
     width: meta.width,
@@ -845,16 +982,17 @@ projectRouter.post('/generate/batch', (req, res) => {
   const scope = body.scope === 'all' ? 'all' : 'missing';
   const nodes = store.data.nodes.filter((node) => node.type !== 'audio');
   const shotIds = new Set(nodes.map((node) => node.id));
-  const ids = (Array.isArray(body.nodeIds) && body.nodeIds.length
-    ? body.nodeIds
-    : nodes
-        .filter((node) => {
-          if (scope === 'all') return true;
-          const run = node.data.run;
-          const stale = run.promptHash !== node.data.promptHash;
-          return stale || run.status === 'error' || run.candidates.length === 0;
-        })
-        .map((node) => node.id)
+  const ids = (
+    Array.isArray(body.nodeIds) && body.nodeIds.length
+      ? body.nodeIds
+      : nodes
+          .filter((node) => {
+            if (scope === 'all') return true;
+            const run = node.data.run;
+            const stale = run.promptHash !== node.data.promptHash;
+            return stale || run.status === 'error' || run.candidates.length === 0;
+          })
+          .map((node) => node.id)
   ).filter((id) => shotIds.has(id));
 
   if (ids.length > config.maxBatch) {
@@ -950,7 +1088,11 @@ projectRouter.patch('/audio/nodes/:id', (req, res) => {
   if (!node) return;
   const { store } = req.project;
   const body = req.body || {};
-  if (body.position && Number.isFinite(Number(body.position.x)) && Number.isFinite(Number(body.position.y))) {
+  if (
+    body.position &&
+    Number.isFinite(Number(body.position.x)) &&
+    Number.isFinite(Number(body.position.y))
+  ) {
     node.position = { x: Number(body.position.x), y: Number(body.position.y) };
   }
   if (typeof body.text === 'string') {
@@ -1111,9 +1253,10 @@ projectRouter.post('/audio/generate/batch', (req, res) => {
   const audioNodes = store.data.nodes
     .filter((node) => node.type === 'audio')
     .sort((a, b) => Number(a.data.no) - Number(b.data.no));
-  const ids = Array.isArray(body.nodeIds) && body.nodeIds.length
-    ? body.nodeIds
-    : audioNodes.map((node) => node.id);
+  const ids =
+    Array.isArray(body.nodeIds) && body.nodeIds.length
+      ? body.nodeIds
+      : audioNodes.map((node) => node.id);
   if (ids.length > config.maxBatch) {
     res.status(400).json({
       error: `单次批量最多 ${config.maxBatch} 个音频，当前请求 ${ids.length} 个`,
@@ -1139,7 +1282,9 @@ projectRouter.post('/audio/exports', (req, res) => {
     const job = req.project.audioExports.start(req.body || {});
     res.json({ job });
   } catch (error) {
-    res.status(error.status || 400).json({ error: error.message, missing: error.missing || undefined });
+    res
+      .status(error.status || 400)
+      .json({ error: error.message, missing: error.missing || undefined });
   }
 });
 
@@ -1161,7 +1306,9 @@ projectRouter.post('/exports', (req, res) => {
     const job = req.project.exports.start(req.body || {});
     res.json({ job });
   } catch (error) {
-    res.status(error.status || 400).json({ error: error.message, missing: error.missing || undefined });
+    res
+      .status(error.status || 400)
+      .json({ error: error.message, missing: error.missing || undefined });
   }
 });
 
@@ -1230,7 +1377,7 @@ app.use('/api', (req, res) => {
 
 app.use((error, req, res, next) => {
   if (error?.type === 'entity.too.large') {
-    res.status(413).json({ error: '文件太大，请压缩后重试（图片 32 MB / 视频 256 MB）' });
+    res.status(413).json({ error: '文件太大，请压缩后重试' });
     return;
   }
   console.error('[server]', error);
@@ -1244,10 +1391,14 @@ app.use((error, req, res, next) => {
 const server = app.listen(config.port, config.host, () => {
   const provider = currentProvider();
   console.log(`[storyboard-workbench] http://${config.host}:${config.port}`);
-  console.log(`[storyboard-workbench] provider=${provider.name} model=${provider.model} size=${config.openai.size}`);
+  console.log(
+    `[storyboard-workbench] provider=${provider.name} model=${provider.model} size=${config.openai.size}`,
+  );
   console.log(`[storyboard-workbench] data=${config.dataDir}`);
   if (provider.name === 'aiclone' && !config.aiclone.apiKey) {
-    console.warn('[storyboard-workbench] 未配置 AICLONE_API_KEY，请在页面「系统设置」中填写后再生成');
+    console.warn(
+      '[storyboard-workbench] 未配置 AICLONE_API_KEY，请在页面「系统设置」中填写后再生成',
+    );
   }
   if (provider.name === 'mock') {
     console.log('[storyboard-workbench] 已显式启用本地占位图（IMAGE_PROVIDER=mock），仅用于测试');
@@ -1263,9 +1414,28 @@ server.on('error', (error) => {
   process.exit(1);
 });
 
-process.on('exit', () => projects.flushAll());
-process.on('SIGINT', () => server.close(() => process.exit(0)));
-process.on('SIGTERM', () => server.close(() => process.exit(0)));
+// SSE 长连接不会自己结束，直接 server.close 会一直等它们，Ctrl+C 就挂住了
+function shutdown() {
+  for (const res of clients) {
+    try {
+      res.end();
+    } catch {}
+  }
+  clients.clear();
+  server.close(() => process.exit(0));
+  // 个别连接卡住时兜底强制退出
+  setTimeout(() => process.exit(0), 3000).unref();
+}
+
+process.on('exit', () => {
+  projects.flushAll();
+  try {
+    const info = JSON.parse(fs.readFileSync(lockFile, 'utf8'));
+    if (info?.pid === process.pid) fs.rmSync(lockFile, { force: true });
+  } catch {}
+});
+process.on('SIGINT', shutdown);
+process.on('SIGTERM', shutdown);
 
 // 崩溃兜底：记录原因并保持进程存活，避免 --watch 频繁重启打断生成任务
 const crashLogFile = path.join(config.dataDir, 'logs', 'server-error.log');

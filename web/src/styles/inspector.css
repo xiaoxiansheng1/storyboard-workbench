@@ -450,7 +450,9 @@
   text-align: left;
   cursor: pointer;
   user-select: none;
-  transition: background 0.16s ease, border-color 0.18s ease;
+  transition:
+    background 0.16s ease,
+    border-color 0.18s ease;
 }
 
 .collapsible[data-state='open'] > .collapsible-trigger {
@@ -575,4 +577,4 @@
 
 .foot-note.warn {
   color: var(--accent);
-}
+}

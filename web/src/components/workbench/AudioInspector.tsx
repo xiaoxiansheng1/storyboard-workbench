@@ -1,23 +1,10 @@
 import { useEffect, useRef, useState, type PointerEvent } from 'react';
 import { useWorkbench } from '../../store';
 import type { AudioData } from '../../types';
-import {
-  ChevronRight,
-  Download,
-  Pause,
-  Play,
-  Trash2,
-  Volume2,
-  VolumeX,
-  X,
-} from 'lucide-react';
+import { ChevronRight, Download, Pause, Play, Trash2, Volume2, VolumeX, X } from 'lucide-react';
 import { Button } from '../common/Button';
 import { Slider } from '../common/Slider';
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from '../ui/collapsible';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible';
 import { Textarea } from '../ui/textarea';
 import { useAudioProgress, useWaveform } from '../../audioWave';
 import { clock, pad } from '../../utils/format';

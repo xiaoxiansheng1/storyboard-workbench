@@ -130,9 +130,7 @@ export function ProjectsPage() {
       <main className={styles.main}>
         <div className={styles.titleRow}>
           <h1>项目</h1>
-          {items && items.length > 0 && (
-            <span className={styles.count}>{items.length} 个项目</span>
-          )}
+          {items && items.length > 0 && <span className={styles.count}>{items.length} 个项目</span>}
         </div>
 
         {items === null ? (

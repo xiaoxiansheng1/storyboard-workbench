@@ -156,7 +156,8 @@ function estimateClipSeconds(
 ): number {
   const duration = Number(candidate.durationSec) || 0;
   const peaks = candidate.peaks;
-  if (pauseMode === 'off' || !duration || !Array.isArray(peaks) || peaks.length < 8) return duration;
+  if (pauseMode === 'off' || !duration || !Array.isArray(peaks) || peaks.length < 8)
+    return duration;
   const unit = duration / peaks.length;
   let saved = 0;
   let runStart = -1;
@@ -188,7 +189,7 @@ export function AudioExportDialog() {
   const cancelAudioExport = useWorkbench((s) => s.cancelAudioExport);
   const viewAudioExport = useWorkbench((s) => s.viewAudioExport);
 
-  const saved = useMemo(loadSettings, []);
+  const saved = useMemo(() => loadSettings(), []);
   const [format, setFormat] = useState<AudioFormat>(saved.format);
   const [gapSec, setGapSec] = useState(saved.gapSec);
   const [gainDb, setGainDb] = useState(saved.gainDb);

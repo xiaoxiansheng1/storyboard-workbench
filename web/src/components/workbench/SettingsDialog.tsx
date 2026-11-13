@@ -2,7 +2,14 @@ import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { useWorkbench } from '../../store';
 import { api } from '../../api';
 import type { AudioHealth, AudioInferMode } from '../../types';
-import { AudioLines, Image as ImageIcon, RotateCcw, Trash2, Upload, type LucideIcon } from 'lucide-react';
+import {
+  AudioLines,
+  Image as ImageIcon,
+  RotateCcw,
+  Trash2,
+  Upload,
+  type LucideIcon,
+} from 'lucide-react';
 import { Modal } from '../common/Modal';
 import { Button } from '../common/Button';
 import { Segmented } from '../common/Segmented';
@@ -107,7 +114,6 @@ export function SettingsDialog() {
     setAudioBaseUrl(settings.audio.baseUrl);
     setInferMode(settings.audio.inferMode || '普通推理');
     void checkAudio(settings.audio.baseUrl);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, settings]);
 
   const pickVoice = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -130,7 +136,10 @@ export function SettingsDialog() {
   if (!open) return null;
 
   const parsedLimits = Object.fromEntries(
-    LIMIT_FIELDS.map((field) => [field.key, parseIntInRange(limits[field.key], field.min, field.max)]),
+    LIMIT_FIELDS.map((field) => [
+      field.key,
+      parseIntInRange(limits[field.key], field.min, field.max),
+    ]),
   ) as Record<LimitKey, number | null>;
   const limitsValid = LIMIT_FIELDS.every((field) => parsedLimits[field.key] !== null);
 
@@ -339,10 +348,7 @@ export function SettingsDialog() {
                   {LIMIT_FIELDS.map((field) => {
                     const invalid = parsedLimits[field.key] === null;
                     return (
-                      <label
-                        key={field.key}
-                        className={`limit-field ${invalid ? 'invalid' : ''}`}
-                      >
+                      <label key={field.key} className={`limit-field ${invalid ? 'invalid' : ''}`}>
                         <span>
                           {field.label}
                           <span className="limit-range">

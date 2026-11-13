@@ -87,7 +87,9 @@
   border: 1px solid var(--line-2);
   border-radius: 13px;
   box-shadow: var(--node-shadow);
-  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+  transition:
+    border-color 0.18s ease,
+    box-shadow 0.18s ease;
 }
 
 .shot-node:hover .node-card {
@@ -96,7 +98,9 @@
 
 .shot-node.is-selected .node-card {
   border-color: color-mix(in srgb, var(--accent) 58%, transparent);
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 32%, transparent), var(--node-shadow);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--accent) 32%, transparent),
+    var(--node-shadow);
 }
 
 .shot-node.is-running .node-card {
@@ -415,17 +419,25 @@
 
 @keyframes skeleton-sweep {
   0% {
-    background-position: 150% 0, 0 0, 0 0;
+    background-position:
+      150% 0,
+      0 0,
+      0 0;
   }
   100% {
-    background-position: -50% 0, 0 0, 0 0;
+    background-position:
+      -50% 0,
+      0 0,
+      0 0;
   }
 }
 
 @keyframes node-glow {
   0%,
   100% {
-    box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 8%, transparent), var(--node-shadow);
+    box-shadow:
+      0 0 0 1px color-mix(in srgb, var(--accent) 8%, transparent),
+      var(--node-shadow);
   }
   50% {
     box-shadow:
@@ -447,4 +459,4 @@
   .shot-node.is-running .node-card {
     animation: none;
   }
-}
+}

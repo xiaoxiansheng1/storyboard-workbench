@@ -48,5 +48,7 @@ export function relativeTime(iso: string): string {
 
 /** 时间码去掉小时段并把逗号换成点，用于节点角标。 */
 export function shortTimecode(timecode: string): string {
-  return String(timecode || '').replace(/^00:/, '').replace(',', '.');
+  return String(timecode || '')
+    .replace(/^00:/, '')
+    .replace(',', '.');
 }

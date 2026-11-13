@@ -77,7 +77,15 @@ test('splitAudioText 清洗字幕、按句子分块并限制单块长度', () =>
   // 相邻短句会合并到同一块，直到接近 chunkChars
   assert.deepEqual(splitAudioText('第一句。第二句！'), ['第一句。第二句！']);
 
-  const srt = ['1', '00:00:01,000 --> 00:00:03,000', '<i>开场白。</i>', '', '2', '00:00:03,000 --> 00:00:05,000', '第二句。'].join('\n');
+  const srt = [
+    '1',
+    '00:00:01,000 --> 00:00:03,000',
+    '<i>开场白。</i>',
+    '',
+    '2',
+    '00:00:03,000 --> 00:00:05,000',
+    '第二句。',
+  ].join('\n');
   assert.deepEqual(splitAudioText(srt), ['开场白。第二句。']);
 
   const long = '这是一段很长的解说词，'.repeat(20);
@@ -154,7 +162,8 @@ test('ensureAudioLinks 给没有连线的老项目补一条序号链', () => {
   assert.equal(store.saved, 1);
 });
 
-test('Usage 跨项目共享计数，可自增与重置', async () => {  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'storyboard-usage-'));
+test('Usage 跨项目共享计数，可自增与重置', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'storyboard-usage-'));
   try {
     const usage = new Usage(dir);
     assert.equal(usage.count(), 0);

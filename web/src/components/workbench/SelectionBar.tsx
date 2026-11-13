@@ -42,12 +42,7 @@ export const SelectionBar = memo(function SelectionBar() {
         )}
       </span>
       <span className="selection-hint">Shift 框选 · Ctrl 加选</span>
-      <Button
-        type="button"
-        className="selection-action"
-        onClick={clearSelection}
-        disabled={!count}
-      >
+      <Button type="button" className="selection-action" onClick={clearSelection} disabled={!count}>
         取消选择
       </Button>
       {picked.audio > 0 && (

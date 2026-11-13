@@ -2,7 +2,6 @@
    其它
    ========================================================= */
 
-
 @media (max-width: 1180px) {
   .stats {
     display: none;
@@ -29,4 +28,4 @@
     max-width: 100vw;
     border-left: 0;
   }
-}
+}

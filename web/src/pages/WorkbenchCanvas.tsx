@@ -90,21 +90,23 @@ export function WorkbenchCanvas({ projectId }: { projectId: string }) {
   const nodesInitialized = useNodesInitialized();
   const [restoredViewport] = useState(() => readViewport(projectId));
   const [fitted, setFitted] = useState(restoredViewport !== null);
+  const [sseOffline, setSseOffline] = useState(false);
   const lastFit = useRef(restoredViewport ? 0 : -1);
-  const connected = useRef(false);
 
   useEffect(() => {
-    connected.current = false;
-    const source = new EventSource('/api/events');
-    source.onopen = () => {
-      // 首次连上时页面自己已经拉过数据，只有重连才需要补齐断线期间的变化
-      if (!connected.current) {
-        connected.current = true;
-        return;
+    let source: EventSource | null = null;
+    let retryTimer: number | null = null;
+    let openTimer: number | null = null;
+    let everConnected = false;
+
+    const clearOpenTimer = () => {
+      if (openTimer !== null) {
+        window.clearTimeout(openTimer);
+        openTimer = null;
       }
-      void resync();
     };
-    source.onmessage = (event) => {
+
+    const handleMessage = (event: MessageEvent) => {
       try {
         const message = JSON.parse(event.data) as {
           type?: string;
@@ -135,7 +137,46 @@ export function WorkbenchCanvas({ projectId }: { projectId: string }) {
         // 忽略心跳或非 JSON 消息
       }
     };
-    return () => source.close();
+
+    const connect = () => {
+      source = new EventSource('/api/events');
+      clearOpenTimer();
+      // 连接 10 秒还没建立就重建：请求卡死（TCP 通了但一直无响应）时
+      // onerror 永远不会触发，不能让重连循环停在一次挂起的请求上
+      openTimer = window.setTimeout(() => {
+        source?.close();
+        source = null;
+        connect();
+      }, 10000);
+      source.onopen = () => {
+        clearOpenTimer();
+        setSseOffline(false);
+        // 首次连上时页面自己已经拉过数据，只有重连才需要补齐断线期间的变化
+        if (everConnected) void resync();
+        everConnected = true;
+      };
+      source.onerror = () => {
+        clearOpenTimer();
+        // 断流后 Chrome 只触发一次 error 就停在 CONNECTING，不会自动重试，
+        // 必须自己关掉旧连接再定时重建；重连成功后 onopen 会恢复并补数据
+        setSseOffline(true);
+        source?.close();
+        source = null;
+        if (retryTimer !== null) return;
+        retryTimer = window.setTimeout(() => {
+          retryTimer = null;
+          connect();
+        }, 3000);
+      };
+      source.onmessage = handleMessage;
+    };
+
+    connect();
+    return () => {
+      clearOpenTimer();
+      if (retryTimer !== null) window.clearTimeout(retryTimer);
+      source?.close();
+    };
   }, [applyRun, applyAudioRun, applyConfig, applyExport, applyAudioExport, resync, projectId]);
 
   useEffect(() => {
@@ -185,8 +226,7 @@ export function WorkbenchCanvas({ projectId }: { projectId: string }) {
       const selected = useWorkbench
         .getState()
         .edges.find(
-          (edge) =>
-            edge.selected && (edge.data as { kind?: string } | undefined)?.kind === 'audio',
+          (edge) => edge.selected && (edge.data as { kind?: string } | undefined)?.kind === 'audio',
         );
       if (!selected) return;
       event.preventDefault();
@@ -325,6 +365,7 @@ export function WorkbenchCanvas({ projectId }: { projectId: string }) {
         </ReactFlow>
         <SelectionBar />
         {ready && nodes.length === 0 && <EmptyState />}
+        {sseOffline && <div className="sse-banner">连接已断开，正在重连…</div>}
       </div>
       <Toolbar />
       <NodeInspector />

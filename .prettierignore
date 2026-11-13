@@ -1,0 +1,5 @@
+node_modules
+web/dist
+data
+samples
+package-lock.json

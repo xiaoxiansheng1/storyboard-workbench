@@ -25,7 +25,7 @@ function normHeader(value) {
   return String(value || '')
     .trim()
     .toLowerCase()
-    .replace(/[\s（）()【】\[\]：:]/g, '');
+    .replace(/[\s（）()【】[\]：:]/g, '');
 }
 
 export function toSeconds(timecode) {
@@ -59,14 +59,17 @@ export function buildProject(rows, { name, sourceFile } = {}) {
     if (!index.has(key)) index.set(key, i);
   });
 
-  const hasPrompt = ALIASES.promptZh.some((a) => index.has(a)) || ALIASES.promptEn.some((a) => index.has(a));
+  const hasPrompt =
+    ALIASES.promptZh.some((a) => index.has(a)) || ALIASES.promptEn.some((a) => index.has(a));
   const missing = [];
   if (!ALIASES.no.some((a) => index.has(a))) missing.push('镜号');
   if (!ALIASES.start.some((a) => index.has(a))) missing.push('SRT起始');
   if (!ALIASES.end.some((a) => index.has(a))) missing.push('SRT结束');
   if (!hasPrompt) missing.push('中文提示词或 English Prompt');
   if (missing.length) {
-    throw new Error(`CSV 缺少列：${missing.join('、')}。请用 srt-to-storyboard 的 expand_prompts.mjs 导出的 CSV。`);
+    throw new Error(
+      `CSV 缺少列：${missing.join('、')}。请用 srt-to-storyboard 的 expand_prompts.mjs 导出的 CSV。`,
+    );
   }
 
   const warnings = [];
@@ -96,7 +99,9 @@ export function buildProject(rows, { name, sourceFile } = {}) {
       ? roundTo(durationCell, 2)
       : roundTo(Math.max(0, endSec - startSec), 2);
     if (Number.isFinite(durationCell) && Math.abs(durationCell - (endSec - startSec)) > 0.06) {
-      warnings.push(`镜号 ${no} 时长列 ${durationCell}s 与时间码差 ${roundTo(endSec - startSec, 2)}s 不一致，已按时长列生成`);
+      warnings.push(
+        `镜号 ${no} 时长列 ${durationCell}s 与时间码差 ${roundTo(endSec - startSec, 2)}s 不一致，已按时长列生成`,
+      );
     }
 
     const promptZh = pick(row, index, ALIASES.promptZh);
@@ -140,10 +145,7 @@ export function buildProject(rows, { name, sourceFile } = {}) {
   });
 
   const ordered = [...nodes].sort((a, b) => a.data.startSec - b.data.startSec);
-  const cols = Math.min(
-    GRID_COLS_MAX,
-    Math.max(4, Math.ceil(Math.sqrt(ordered.length * 1.4))),
-  );
+  const cols = Math.min(GRID_COLS_MAX, Math.max(4, Math.ceil(Math.sqrt(ordered.length * 1.4))));
   // 蛇形折行，保证相邻镜头在画布上仍然相邻
   ordered.forEach((node, i) => {
     const row = Math.floor(i / cols);
@@ -171,7 +173,9 @@ export function buildProject(rows, { name, sourceFile } = {}) {
     laneB: nodes.filter((n) => n.data.anchor === 'B').length,
     firstStart: ordered.length ? ordered[0].data.startSec : 0,
     lastEnd: ordered.length ? ordered[ordered.length - 1].data.endSec : 0,
-    span: ordered.length ? roundTo(ordered[ordered.length - 1].data.endSec - ordered[0].data.startSec, 2) : 0,
+    span: ordered.length
+      ? roundTo(ordered[ordered.length - 1].data.endSec - ordered[0].data.startSec, 2)
+      : 0,
     warnings,
   };
 

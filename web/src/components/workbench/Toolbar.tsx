@@ -1,15 +1,7 @@
 import { memo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useShallow } from 'zustand/react/shallow';
-import {
-  ChevronDown,
-  FileSpreadsheet,
-  Moon,
-  PanelTop,
-  Settings,
-  Sun,
-  Volume2,
-} from 'lucide-react';
+import { ChevronDown, FileSpreadsheet, Moon, PanelTop, Settings, Sun, Volume2 } from 'lucide-react';
 import { useWorkbench } from '../../store';
 import { Button } from '../common/Button';
 import {

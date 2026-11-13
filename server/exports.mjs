@@ -6,14 +6,20 @@ import { spawn } from 'node:child_process';
 import { roundTo } from './utils/num.mjs';
 import { fileTimestamp } from './utils/time.mjs';
 import { messageOf } from './utils/message.mjs';
-
-const HISTORY_LIMIT = 20;
+import { createExportRunner } from './export-runner.mjs';
 
 function normalizeOptions(raw = {}) {
   const width = Math.trunc(Number(raw.width));
   const height = Math.trunc(Number(raw.height));
   const fps = Math.trunc(Number(raw.fps)) || 30;
-  if (!Number.isFinite(width) || !Number.isFinite(height) || width < 320 || height < 240 || width > 3840 || height > 2160) {
+  if (
+    !Number.isFinite(width) ||
+    !Number.isFinite(height) ||
+    width < 320 ||
+    height < 240 ||
+    width > 3840 ||
+    height > 2160
+  ) {
     return { error: '输出尺寸需在 320×240 到 3840×2160 之间' };
   }
   if (width % 2 || height % 2) return { error: '输出尺寸必须是偶数' };
@@ -60,100 +66,30 @@ export function createExports({
   historyFile = path.join(config.dataDir, 'exports.json'),
 }) {
   const dir = exportDir;
-  fs.mkdirSync(dir, { recursive: true });
 
-  let history = loadHistory();
-  let active = null;
-  let disposed = false;
-
-  function emit(job) {
-    if (disposed) return;
-    broadcast({ type: 'export', projectId, job });
-  }
-
-  function loadHistory() {
-    try {
-      const data = JSON.parse(fs.readFileSync(historyFile, 'utf8'));
-      return Array.isArray(data) ? data.slice(0, HISTORY_LIMIT) : [];
-    } catch {
-      return [];
-    }
-  }
-
-  function saveHistory() {
-    if (disposed) return;
-    const tmp = `${historyFile}.tmp`;
-    fs.writeFileSync(tmp, JSON.stringify(history.slice(0, HISTORY_LIMIT), null, 2), 'utf8');
-    fs.renameSync(tmp, historyFile);
-  }
-
-  function finish(run, job) {
-    if (run.finished) return;
-    run.finished = true;
-    job.finishedAt = job.finishedAt || new Date().toISOString();
-    if (active === run) active = null;
-    if (disposed) return;
-    history = [job, ...history.filter((item) => item.id !== job.id)].slice(0, HISTORY_LIMIT);
-    saveHistory();
-    emit(job);
-  }
-
-  function ensureAlive(run) {
-    if (disposed) throw new Error('项目已删除');
-    if (run.canceled) throw new Error('已取消');
-  }
-
-  function killChildren(run) {
-    for (const child of run.children) child.kill('SIGKILL');
-  }
-
-  function runFfmpeg(run, args, onProgress) {
-    return new Promise((resolve, reject) => {
-      const child = spawn(
-        config.ffmpegPath,
-        onProgress ? ['-progress', 'pipe:1', '-nostats', ...args] : args,
-        { windowsHide: true },
-      );
-      run.children.add(child);
-      let stderr = '';
-      let stdout = '';
-      child.stderr.on('data', (chunk) => {
-        stderr = `${stderr}${chunk.toString()}`.slice(-2000);
-      });
-      if (onProgress) {
-        child.stdout.on('data', (chunk) => {
-          stdout += chunk.toString();
-          let index = stdout.indexOf('\n');
-          while (index >= 0) {
-            const line = stdout.slice(0, index).trim();
-            stdout = stdout.slice(index + 1);
-            const match = /^out_time_us=(\d+)$/.exec(line);
-            if (match) onProgress(Number(match[1]) / 1_000_000);
-            index = stdout.indexOf('\n');
-          }
-        });
-      }
-      child.on('error', (error) => {
-        run.children.delete(child);
-        reject(
-          new Error(
-            error.code === 'ENOENT'
-              ? `未找到 ffmpeg（${config.ffmpegPath}），请安装后重试或设置 FFMPEG_PATH`
-              : error.message,
-          ),
-        );
-      });
-      child.on('close', (code) => {
-        run.children.delete(child);
-        if (run.canceled) {
-          reject(new Error('已取消'));
-          return;
-        }
-        if (code === 0) resolve();
-        else reject(new Error(stderr.trim().split(/\r?\n/).slice(-4).join(' ') || `ffmpeg 退出码 ${code}`));
-      });
-    });
-  }
+  const {
+    emit,
+    finish,
+    ensureAlive,
+    runFfmpeg,
+    killChildren,
+    isBusy,
+    begin,
+    cancel,
+    list,
+    get,
+    dispose,
+    isDisposed,
+    label,
+  } = createExportRunner({
+    broadcast,
+    projectId,
+    type: 'export',
+    config,
+    exportDir,
+    historyFile,
+    label: '合成任务',
+  });
 
   let encoderChoice; // { ffmpegPath, nvenc }
 
@@ -189,13 +125,13 @@ export function createExports({
         { windowsHide: true },
       );
       let settled = false;
-      const finish = (ok) => {
+      const finishDetect = (ok) => {
         if (settled) return;
         settled = true;
         resolve(ok);
       };
-      child.on('error', () => finish(false));
-      child.on('close', (code) => finish(code === 0));
+      child.on('error', () => finishDetect(false));
+      child.on('close', (code) => finishDetect(code === 0));
     });
   }
 
@@ -211,7 +147,18 @@ export function createExports({
 
   function encoderArgs(encoder, { crf, fast }) {
     if (encoder === 'nvenc') {
-      return ['-c:v', 'h264_nvenc', '-preset', fast ? 'p1' : 'p5', '-rc', 'vbr', '-cq', crf, '-b:v', '0'];
+      return [
+        '-c:v',
+        'h264_nvenc',
+        '-preset',
+        fast ? 'p1' : 'p5',
+        '-rc',
+        'vbr',
+        '-cq',
+        crf,
+        '-b:v',
+        '0',
+      ];
     }
     return ['-c:v', 'libx264', '-preset', fast ? 'ultrafast' : 'veryfast', '-crf', crf];
   }
@@ -322,7 +269,10 @@ export function createExports({
     // zoompan 的裁剪偏移按整数像素取整，画布越接近输出抖动越明显；
     // 超采样到输出的 2–4 倍并把画布控制在约 33MP 内，可把取整误差压到 1/4–1/2 像素
     const motionScale = withMotion
-      ? Math.max(2, Math.min(4, Math.floor(Math.sqrt(33_177_600 / (options.width * options.height)))))
+      ? Math.max(
+          2,
+          Math.min(4, Math.floor(Math.sqrt(33_177_600 / (options.width * options.height)))),
+        )
       : 1;
     const canvasWidth = options.width * motionScale;
     const canvasHeight = options.height * motionScale;
@@ -354,9 +304,7 @@ export function createExports({
       } else {
         const frames = Math.max(2, Math.round(duration * options.fps));
         const zoom =
-          options.motion === 'in'
-            ? `1+0.05*on/${frames - 1}`
-            : `1.05-0.05*on/${frames - 1}`;
+          options.motion === 'in' ? `1+0.05*on/${frames - 1}` : `1.05-0.05*on/${frames - 1}`;
         // zoompan 自带的缩小内核在逐帧取整时会闪动，先输出更大的画面，再用 lanczos 一次性缩到目标尺寸；
         // 4K 输出若同样用 2 倍中间帧会非常慢，降到 1.5 倍
         const midScale = options.width * options.height > 4_000_000 ? 1.5 : 2;
@@ -378,7 +326,7 @@ export function createExports({
       const tail = tailHandle(index);
       const inPoint = Math.min(Math.max(0, shot.inPoint), Math.max(0, shot.videoDuration - 0.05));
       const available = Math.max(0, shot.videoDuration - inPoint);
-      let take = slot;
+      let take;
       let speed = 1;
       let freeze = 0;
       if (available <= 0.05) {
@@ -428,7 +376,10 @@ export function createExports({
       const report = (seconds, total, start, end) => {
         if (!(total > 0)) return;
         const ratio = Math.max(0, Math.min(1, seconds / total));
-        const value = Math.max(job.progress, Math.min(99, Math.round(start + ratio * (end - start))));
+        const value = Math.max(
+          job.progress,
+          Math.min(99, Math.round(start + ratio * (end - start))),
+        );
         if (value === job.progress) return;
         job.progress = value;
         const now = Date.now();
@@ -438,7 +389,9 @@ export function createExports({
       };
 
       // 片段文件名与顺序固定，拼接清单可以先行构造
-      const clips = shots.map((_, i) => path.join(tmp, `clip-${String(i + 1).padStart(3, '0')}.mp4`));
+      const clips = shots.map((_, i) =>
+        path.join(tmp, `clip-${String(i + 1).padStart(3, '0')}.mp4`),
+      );
       const list = clips.map((clip) => `file '${concatPath(clip)}'`);
 
       const ratios = new Float64Array(shots.length);
@@ -571,9 +524,7 @@ export function createExports({
         const outputDuration = shots.reduce((sum, shot) => sum + shot.duration, 0);
         const args = ['-y', '-hide_banner', '-loglevel', 'error'];
         for (const clip of clips) args.push('-i', clip);
-        const chain = clips.map(
-          (_, i) => `[${i}:v]settb=AVTB,setpts=PTS-STARTPTS[c${i}]`,
-        );
+        const chain = clips.map((_, i) => `[${i}:v]settb=AVTB,setpts=PTS-STARTPTS[c${i}]`);
         let last = 'c0';
         let boundary = shots[0].duration;
         for (let i = 1; i < clips.length; i += 1) {
@@ -643,7 +594,7 @@ export function createExports({
       // 并行渲染中某个片段失败时，停掉其余仍在跑的 ffmpeg，避免占用句柄影响临时目录清理
       killChildren(run);
       job.finishedAt = new Date().toISOString();
-      if (disposed) return;
+      if (isDisposed()) return;
       if (run.canceled) {
         job.status = 'canceled';
         job.stage = '已取消';
@@ -662,8 +613,8 @@ export function createExports({
   }
 
   function start(rawOptions) {
-    if (active) {
-      const error = new Error('已有合成任务正在进行');
+    if (isBusy()) {
+      const error = new Error(`已有${label}正在进行`);
       error.status = 409;
       throw error;
     }
@@ -694,45 +645,10 @@ export function createExports({
       finishedAt: null,
     };
     const run = { job, shots, canceled: false, children: new Set(), finished: false };
-    active = run;
+    begin(run);
     emit(job);
     void process(run);
     return job;
-  }
-
-  function cancel(id) {
-    if (!active || active.job.id !== id) {
-      const error = new Error('没有正在运行的合成任务');
-      error.status = 404;
-      throw error;
-    }
-    if (active.job.status === 'done' || active.job.status === 'error') {
-      const error = new Error('任务已结束');
-      error.status = 409;
-      throw error;
-    }
-    active.canceled = true;
-    active.job.status = 'canceled';
-    active.job.stage = '已取消';
-    active.job.finishedAt = new Date().toISOString();
-    emit(active.job);
-    killChildren(active);
-    return active.job;
-  }
-
-  function list() {
-    return { active: active ? active.job : null, jobs: history };
-  }
-
-  function get(id) {
-    if (active && active.job.id === id) return active.job;
-    return history.find((item) => item.id === id) || null;
-  }
-
-  function dispose() {
-    disposed = true;
-    if (active) killChildren(active);
-    active = null;
   }
 
   return { start, cancel, list, get, dispose };

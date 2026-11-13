@@ -1,10 +1,6 @@
 import { api } from '../api';
 import { errorMessage } from '../utils/error';
-import type {
-  AudioRun,
-  AudioSplitResponse,
-  ProjectNode,
-} from '../types';
+import type { AudioRun, AudioSplitResponse, ProjectNode } from '../types';
 import {
   patchAudioList,
   projectBase,

@@ -2,7 +2,8 @@ import { decodeBase64, downloadImage, mimeFor } from './download.mjs';
 import { timeoutSignal } from './signal.mjs';
 
 export function createOpenAIProvider(config) {
-  const { baseUrl, apiKey, model, size, quality, responseFormat, extraHeaders, extraBody } = config.openai;
+  const { baseUrl, apiKey, model, size, quality, responseFormat, extraHeaders, extraBody } =
+    config.openai;
   const timeoutMs = config.timeoutMs;
 
   return {
@@ -15,7 +16,8 @@ export function createOpenAIProvider(config) {
 
       const body = { model, prompt, n: 1, size };
       if (quality) body.quality = quality;
-      if (responseFormat === 'b64_json' || responseFormat === 'url') body.response_format = responseFormat;
+      if (responseFormat === 'b64_json' || responseFormat === 'url')
+        body.response_format = responseFormat;
       if (config.requestSeed && seed !== undefined) body.seed = seed;
       Object.assign(body, extraBody);
 
@@ -45,7 +47,8 @@ export function createOpenAIProvider(config) {
         const data = decodeBase64(item.b64_json);
         return { data, mime: mimeFor(data) };
       }
-      if (item.url) return downloadImage(new URL(item.url, `${baseUrl}/`).toString(), timeoutMs, signal);
+      if (item.url)
+        return downloadImage(new URL(item.url, `${baseUrl}/`).toString(), timeoutMs, signal);
 
       throw new Error(`响应格式无法识别（既无 b64_json 也无 url）：${text.slice(0, 300)}`);
     },

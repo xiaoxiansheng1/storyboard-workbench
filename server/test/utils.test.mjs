@@ -119,9 +119,12 @@ test('withRetry 对可重试错误重试、对其他错误直接抛出', async (
   );
   assert.equal(postCalls, 1);
 
-  await assert.rejects(withRetry(async () => {
-    throw new Error('HTTP 502: still bad');
-  }, 2), /HTTP 502/);
+  await assert.rejects(
+    withRetry(async () => {
+      throw new Error('HTTP 502: still bad');
+    }, 2),
+    /HTTP 502/,
+  );
 });
 
 test('delay 至少等待指定毫秒', async () => {

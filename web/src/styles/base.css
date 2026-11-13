@@ -86,8 +86,9 @@
   --node-shadow: 0 18px 46px rgba(0, 0, 0, 0.38);
 
   --radius: 10px;
-  --font-ui: 'HarmonyOS Sans SC', -apple-system, BlinkMacSystemFont, 'Segoe UI',
-    'Microsoft YaHei UI', 'Microsoft YaHei', sans-serif;
+  --font-ui:
+    'HarmonyOS Sans SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei UI',
+    'Microsoft YaHei', sans-serif;
   --font-display: var(--font-ui);
   --font-mono: var(--font-ui);
 }
@@ -171,7 +172,9 @@ body {
   overflow: hidden;
   -webkit-font-smoothing: auto;
   text-rendering: optimizeLegibility;
-  transition: background-color 0.2s ease, color 0.2s ease;
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease;
 }
 
 ::selection {
@@ -227,7 +230,9 @@ select {
   border-radius: 8px;
   padding: 8px 10px;
   outline: none;
-  transition: border-color 0.14s ease, box-shadow 0.14s ease;
+  transition:
+    border-color 0.14s ease,
+    box-shadow 0.14s ease;
 }
 
 input::placeholder,
@@ -269,4 +274,4 @@ textarea {
 
 ::-webkit-scrollbar-track {
   background: transparent;
-}
+}

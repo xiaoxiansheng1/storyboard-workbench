@@ -1,15 +1,20 @@
 import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { useWorkbench } from '../../store';
 import type { ShotData } from '../../types';
-import { ChevronRight, Copy, Download, Film, Image as ImageIcon, Trash2, Upload, X } from 'lucide-react';
+import {
+  ChevronRight,
+  Copy,
+  Download,
+  Film,
+  Image as ImageIcon,
+  Trash2,
+  Upload,
+  X,
+} from 'lucide-react';
 import { Button } from '../common/Button';
 import { pad } from '../../utils/format';
 import { Segmented } from '../common/Segmented';
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from '../ui/collapsible';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible';
 import { Textarea } from '../ui/textarea';
 
 interface FormState {
@@ -63,7 +68,9 @@ export function ShotInspector({ node }: { node: { id: string; data: ShotData } }
   const [negTab, setNegTab] = useState<'en' | 'zh'>('zh');
   const [submitting, setSubmitting] = useState(false);
   const [mediaTab, setMediaTab] = useState<'image' | 'video'>('image');
-  const busy = node ? node.data.run.status === 'queued' || node.data.run.status === 'running' : false;
+  const busy = node
+    ? node.data.run.status === 'queued' || node.data.run.status === 'running'
+    : false;
   const video = node?.data.video || null;
 
   useEffect(() => {
@@ -123,10 +130,9 @@ export function ShotInspector({ node }: { node: { id: string; data: ShotData } }
     }
   };
 
-  const setField =
-    (key: keyof FormState) => (event: ChangeEvent<HTMLTextAreaElement>) => {
-      setForm((prev) => ({ ...prev, [key]: event.target.value }));
-    };
+  const setField = (key: keyof FormState) => (event: ChangeEvent<HTMLTextAreaElement>) => {
+    setForm((prev) => ({ ...prev, [key]: event.target.value }));
+  };
 
   const copyPrompt = () => {
     const text = [promptValue, negativeValue ? `Avoid: ${negativeValue}` : '']
@@ -190,10 +196,7 @@ export function ShotInspector({ node }: { node: { id: string; data: ShotData } }
             {data.anchor} {data.anchor === 'B' ? '空镜' : '人物'}
           </span>
           <span className="inspector-dur">{data.duration.toFixed(2)}s</span>
-          <span
-            className="inspector-inline"
-            title={`${data.srtStart} → ${data.srtEnd}`}
-          >
+          <span className="inspector-inline" title={`${data.srtStart} → ${data.srtEnd}`}>
             {data.srtStart} → {data.srtEnd}
           </span>
         </div>
@@ -241,116 +244,112 @@ export function ShotInspector({ node }: { node: { id: string; data: ShotData } }
               selected || (!working && video?.posterUrl) || showVideo ? '' : 'is-empty'
             } ${working && !selected && !showVideo ? 'is-loading' : ''}`}
           >
-          {showVideo && video ? (
-            <video
-              className="hero-video"
-              src={video.url}
-              poster={video.posterUrl || undefined}
-              controls
-              playsInline
-              preload="metadata"
-            />
-          ) : selected ? (
-            <img
-              src={selected.url}
-              alt={`镜头 ${data.no}`}
-              onClick={() => setLightbox({ nodeId: node.id, index: selectedIndex })}
-            />
-          ) : !working && video?.posterUrl ? (
-            <img
-              className="is-poster"
-              src={video.posterUrl}
-              alt={`镜头 ${data.no} 视频`}
-            />
-          ) : (
-            <div className={`hero-empty ${working ? 'is-loading' : ''}`}>
-              {working ? (
-                <span className="spinner" />
-              ) : (
-                <span className="hero-glyph">
-                  <ImageIcon size={26} />
+            {showVideo && video ? (
+              <video
+                className="hero-video"
+                src={video.url}
+                poster={video.posterUrl || undefined}
+                controls
+                playsInline
+                preload="metadata"
+              />
+            ) : selected ? (
+              <img
+                src={selected.url}
+                alt={`镜头 ${data.no}`}
+                onClick={() => setLightbox({ nodeId: node.id, index: selectedIndex })}
+              />
+            ) : !working && video?.posterUrl ? (
+              <img className="is-poster" src={video.posterUrl} alt={`镜头 ${data.no} 视频`} />
+            ) : (
+              <div className={`hero-empty ${working ? 'is-loading' : ''}`}>
+                {working ? (
+                  <span className="spinner" />
+                ) : (
+                  <span className="hero-glyph">
+                    <ImageIcon size={26} />
+                  </span>
+                )}
+                <span>
+                  {busy
+                    ? run.status === 'queued'
+                      ? '排队中…'
+                      : '正在生成首帧…'
+                    : submitting
+                      ? '正在提交…'
+                      : '暂无首帧'}
                 </span>
-              )}
-              <span>
-                {busy
-                  ? run.status === 'queued'
-                    ? '排队中…'
-                    : '正在生成首帧…'
-                  : submitting
-                    ? '正在提交…'
-                    : '暂无首帧'}
-              </span>
-              {working && (
+                {working && (
+                  <span className="marquee" aria-hidden="true">
+                    <span>AI 正在绘制 · GENERATING · AI 正在绘制 · GENERATING ·&nbsp;</span>
+                  </span>
+                )}
+                {working && <span className="scan" />}
+              </div>
+            )}
+            {selected && !showVideo && <div className="hero-shade" />}
+            {selected && working && !showVideo && (
+              <div className="hero-loading">
                 <span className="marquee" aria-hidden="true">
                   <span>AI 正在绘制 · GENERATING · AI 正在绘制 · GENERATING ·&nbsp;</span>
                 </span>
-              )}
-              {working && <span className="scan" />}
-            </div>
-          )}
-          {selected && !showVideo && <div className="hero-shade" />}
-          {selected && working && !showVideo && (
-            <div className="hero-loading">
-              <span className="marquee" aria-hidden="true">
-                <span>AI 正在绘制 · GENERATING · AI 正在绘制 · GENERATING ·&nbsp;</span>
-              </span>
-              <span className="scan" />
-            </div>
-          )}
-          {showVideo && video && (
-            <span className={`media-tag ${alignTone}`}>
-              {video.durationSec.toFixed(2)}s · {alignLabel}
-            </span>
-          )}
-          <div className="hero-actions">
-            <Button
-              type="button"
-              className="hero-action"
-              title={working ? '生成中，暂不能上传' : '上传本地图片'}
-              aria-label="上传本地图片"
-              disabled={uploading || working}
-              onClick={() => fileRef.current?.click()}
-            >
-              {uploading ? <span className="spinner tiny" /> : <Upload size={14} />}
-            </Button>
-            <Button
-              type="button"
-              className={`hero-action ${video ? 'is-on' : ''}`}
-              title={video ? '替换镜头视频' : '上传镜头视频'}
-              aria-label={video ? '替换镜头视频' : '上传镜头视频'}
-              disabled={uploadingVideo}
-              onClick={() => videoFileRef.current?.click()}
-            >
-              {uploadingVideo ? <span className="spinner tiny" /> : <Film size={14} />}
-            </Button>
-            {selected && (
-              <a
-                className="hero-action"
-                href={selected.url}
-                download={
-                  selected.filename || selected.url.split('/').pop() || `shot-${data.no}.png`
-                }
-                title="下载当前图片"
-                aria-label="下载当前图片"
-              >
-                <Download size={14} />
-              </a>
+                <span className="scan" />
+              </div>
             )}
-          </div>
-          <input
-            ref={fileRef}
-            className="file-input"
-            type="file"
-            accept="image/png,image/jpeg,image/webp,image/gif,image/avif"
-            onChange={(event) => void pickFile(event)}
-          />
-          <input
-            ref={videoFileRef}
-            className="file-input"
-            type="file"
-            accept="video/mp4,video/quicktime,video/webm,video/x-matroska,video/ogg"
-            onChange={(event) => void pickVideo(event)}
-          />
+            {showVideo && video && (
+              <span className={`media-tag ${alignTone}`}>
+                {video.durationSec.toFixed(2)}s · {alignLabel}
+              </span>
+            )}
+            <div className="hero-actions">
+              <Button
+                type="button"
+                className="hero-action"
+                title={working ? '生成中，暂不能上传' : '上传本地图片'}
+                aria-label="上传本地图片"
+                disabled={uploading || working}
+                onClick={() => fileRef.current?.click()}
+              >
+                {uploading ? <span className="spinner tiny" /> : <Upload size={14} />}
+              </Button>
+              <Button
+                type="button"
+                className={`hero-action ${video ? 'is-on' : ''}`}
+                title={video ? '替换镜头视频' : '上传镜头视频'}
+                aria-label={video ? '替换镜头视频' : '上传镜头视频'}
+                disabled={uploadingVideo}
+                onClick={() => videoFileRef.current?.click()}
+              >
+                {uploadingVideo ? <span className="spinner tiny" /> : <Film size={14} />}
+              </Button>
+              {selected && (
+                <a
+                  className="hero-action"
+                  href={selected.url}
+                  download={
+                    selected.filename || selected.url.split('/').pop() || `shot-${data.no}.png`
+                  }
+                  title="下载当前图片"
+                  aria-label="下载当前图片"
+                >
+                  <Download size={14} />
+                </a>
+              )}
+            </div>
+            <input
+              ref={fileRef}
+              className="file-input"
+              type="file"
+              accept="image/png,image/jpeg,image/webp,image/gif,image/avif"
+              onChange={(event) => void pickFile(event)}
+            />
+            <input
+              ref={videoFileRef}
+              className="file-input"
+              type="file"
+              accept="video/mp4,video/quicktime,video/webm,video/x-matroska,video/ogg"
+              onChange={(event) => void pickVideo(event)}
+            />
           </div>
         </section>
 
@@ -373,11 +372,7 @@ export function ShotInspector({ node }: { node: { id: string; data: ShotData } }
           {needsKey ? (
             <div className="deck-hint">
               未配置 AIClone Key，
-              <Button
-                type="button"
-                className="link-mini"
-                onClick={() => setSettingsOpen(true)}
-              >
+              <Button type="button" className="link-mini" onClick={() => setSettingsOpen(true)}>
                 去系统设置
               </Button>
             </div>

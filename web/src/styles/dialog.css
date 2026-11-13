@@ -29,7 +29,9 @@
   background: var(--surface-2);
   cursor: pointer;
   text-align: center;
-  transition: border-color 0.14s ease, background 0.14s ease;
+  transition:
+    border-color 0.14s ease,
+    background 0.14s ease;
 }
 
 .dropzone:hover,
@@ -204,4 +206,4 @@
   content: '·';
   margin-right: 6px;
   color: var(--warn);
-}
+}

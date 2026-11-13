@@ -1,17 +1,23 @@
 import { pad2 } from '../utils/num.mjs';
 
 function escapeXml(value) {
-  return String(value).replace(/[&<>"']/g, (c) => ({
-    '&': '&amp;',
-    '<': '&lt;',
-    '>': '&gt;',
-    '"': '&quot;',
-    "'": '&apos;',
-  }[c]));
+  return String(value).replace(
+    /[&<>"']/g,
+    (c) =>
+      ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&apos;',
+      })[c],
+  );
 }
 
 function wrap(text, maxChars) {
-  const clean = String(text || '').replace(/\s+/g, ' ').trim();
+  const clean = String(text || '')
+    .replace(/\s+/g, ' ')
+    .trim();
   if (!clean) return [];
   const lines = [];
   let line = '';
@@ -33,7 +39,9 @@ export function createMockProvider() {
     name: 'mock',
     model: 'placeholder-svg',
     async generate({ size, meta = {} }) {
-      const [w, h] = String(size || '1280x720').split('x').map(Number);
+      const [w, h] = String(size || '1280x720')
+        .split('x')
+        .map(Number);
       const width = Number.isFinite(w) ? w : 1280;
       const height = Number.isFinite(h) ? h : 720;
       const accent = meta.anchor === 'B' ? '#9ec4d2' : '#ddc09a';

@@ -19,7 +19,15 @@ export class VoiceStore {
 
   get() {
     const meta = this.#meta();
-    if (!meta?.filename) return { exists: false, name: null, mime: null, durationSec: null, updatedAt: null, path: null };
+    if (!meta?.filename)
+      return {
+        exists: false,
+        name: null,
+        mime: null,
+        durationSec: null,
+        updatedAt: null,
+        path: null,
+      };
     const file = path.join(this.dir, meta.filename);
     return {
       exists: fs.existsSync(file),
@@ -32,7 +40,10 @@ export class VoiceStore {
   }
 
   save({ data, mime, originalName }) {
-    const clean = String(mime || '').split(';')[0].trim().toLowerCase();
+    const clean = String(mime || '')
+      .split(';')[0]
+      .trim()
+      .toLowerCase();
     let ext = clean.startsWith('audio/') ? extFromMime(clean, '') : '';
     if (!ext) ext = sniffExt(data);
     const filename = `reference.${ext}`;
@@ -42,7 +53,12 @@ export class VoiceStore {
     }
     const target = path.join(this.dir, filename);
     fs.writeFileSync(target, data);
-    return { filename, path: target, mime: clean || `audio/${ext}`, originalName: originalName || filename };
+    return {
+      filename,
+      path: target,
+      mime: clean || `audio/${ext}`,
+      originalName: originalName || filename,
+    };
   }
 
   setMeta({ filename, name, mime, durationSec }) {
