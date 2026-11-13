@@ -406,6 +406,9 @@ app.get('/api/events', (req, res) => {
   });
   res.flushHeaders?.();
   res.write(`retry: 3000\n\n`);
+  // 客户端断开时 socket 会异步抛 ECONNRESET，不挂 error 监听会崩掉整个进程
+  res.on('error', () => {});
+  res.socket?.on('error', () => {});
   clients.add(res);
   const ping = setInterval(() => {
     try {
@@ -1263,3 +1266,16 @@ server.on('error', (error) => {
 process.on('exit', () => projects.flushAll());
 process.on('SIGINT', () => server.close(() => process.exit(0)));
 process.on('SIGTERM', () => server.close(() => process.exit(0)));
+
+// 崩溃兜底：记录原因并保持进程存活，避免 --watch 频繁重启打断生成任务
+const crashLogFile = path.join(config.dataDir, 'logs', 'server-error.log');
+function logCrash(kind, error) {
+  const stack = error?.stack || String(error);
+  console.error(`[server] ${kind}:\n${stack}`);
+  try {
+    fs.mkdirSync(path.dirname(crashLogFile), { recursive: true });
+    fs.appendFileSync(crashLogFile, `[${new Date().toISOString()}] ${kind}\n${stack}\n\n`);
+  } catch {}
+}
+process.on('uncaughtException', (error) => logCrash('uncaughtException', error));
+process.on('unhandledRejection', (error) => logCrash('unhandledRejection', error));
